@@ -1,0 +1,98 @@
+import axios from 'axios';
+
+export const api = axios.create({
+    baseURL: '/api',
+    headers: {
+        'Content-Type': 'application/json',
+    },
+});
+
+// Request interceptor for auth token
+api.interceptors.request.use((config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
+
+// Response interceptor for error handling
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response?.status === 401) {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        }
+        return Promise.reject(error);
+    }
+);
+
+// API functions
+export const authApi = {
+    login: (email: string, password: string) =>
+        api.post('/auth/login', { email, password }),
+    register: (data: Record<string, unknown>) =>
+        api.post('/auth/register', data),
+    me: () =>
+        api.get('/auth/me'),
+};
+
+export const leadsApi = {
+    list: (params?: Record<string, unknown>) =>
+        api.get('/leads', { params }),
+    get: (id: string) =>
+        api.get(`/leads/${id}`),
+    create: (data: Record<string, unknown>) =>
+        api.post('/leads', data),
+    import: (file: File, mode: string) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('mode', mode);
+        return api.post('/leads/import', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+    },
+    getOptimalTime: (id: string) =>
+        api.get(`/leads/${id}/optimal-time`),
+};
+
+export const callsApi = {
+    log: (data: Record<string, unknown>) =>
+        api.post('/calls', data),
+    ghostSync: (data: Record<string, unknown>) =>
+        api.post('/calls/ghost-sync', data),
+    get: (id: string) =>
+        api.get(`/calls/${id}`),
+    updateDisposition: (id: string, data: Record<string, unknown>) =>
+        api.put(`/calls/${id}/disposition`, data),
+};
+
+export const analyticsApi = {
+    team: (period?: string) =>
+        api.get('/analytics/team', { params: { period } }),
+    heatmap: () =>
+        api.get('/analytics/heatmap'),
+    warRoom: () =>
+        api.get('/analytics/war-room'),
+    rep: (id: string) =>
+        api.get(`/analytics/rep/${id}`),
+};
+
+export const leaderboardApi = {
+    top: (limit?: number) =>
+        api.get('/leaderboard/top', { params: { limit } }),
+    rep: (id: string) =>
+        api.get(`/leaderboard/rep/${id}`),
+    history: (days?: number) =>
+        api.get('/leaderboard/history', { params: { days } }),
+};
+
+export const aiApi = {
+    analyze: (callId: string, audioUrl?: string) =>
+        api.post('/ai/analyze', { callId, audioUrl }),
+    battlecard: (objection: string, context?: Record<string, unknown>) =>
+        api.post('/ai/battlecard', { objection, context }),
+    battlecards: () =>
+        api.get('/ai/battlecards'),
+};

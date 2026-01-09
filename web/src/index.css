@@ -1,0 +1,149 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* VocalPulse Design System */
+
+:root {
+  /* Primary Colors */
+  --color-primary: #4f46e5;      /* Indigo-600 */
+  --color-primary-hover: #4338ca;
+  --color-primary-light: #eef2ff;
+  
+  /* Neutral Colors */
+  --color-text: #0f172a;          /* Slate-900 */
+  --color-text-secondary: #475569;
+  --color-bg: #f8fafc;
+  --color-card: #ffffff;
+  
+  /* Status Colors */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  
+  /* Glassmorphism */
+  --glass-bg: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.2);
+}
+
+/* Inter Font - imported at top */
+
+* {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+  min-height: 100vh;
+}
+
+/* Glassmorphic Card */
+.glass-card {
+  @apply bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* Dark glass card for war room */
+.glass-card-dark {
+  @apply bg-slate-900/80 backdrop-blur-lg border border-slate-700/50 rounded-2xl;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* Rank badges */
+.rank-badge {
+  @apply flex items-center justify-center w-10 h-10 rounded-full font-bold text-lg;
+}
+
+.rank-gold {
+  @apply bg-gradient-to-br from-yellow-300 to-amber-500 text-amber-900;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
+}
+
+.rank-silver {
+  @apply bg-gradient-to-br from-gray-200 to-gray-400 text-gray-800;
+  box-shadow: 0 4px 14px rgba(156, 163, 175, 0.4);
+}
+
+.rank-bronze {
+  @apply bg-gradient-to-br from-orange-300 to-orange-600 text-orange-900;
+  box-shadow: 0 4px 14px rgba(251, 146, 60, 0.4);
+}
+
+/* Live pulse animation */
+.live-pulse {
+  @apply relative;
+}
+
+.live-pulse::after {
+  content: '';
+  @apply absolute -right-1 -top-1 w-3 h-3 bg-green-500 rounded-full;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+/* Celebration animation */
+@keyframes confetti {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; }
+}
+
+.celebration {
+  animation: celebration-pop 0.5s ease-out;
+}
+
+@keyframes celebration-pop {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Button styles */
+.btn-primary {
+  @apply px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-all duration-200;
+  @apply focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2;
+}
+
+.btn-secondary {
+  @apply px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg transition-all duration-200;
+}
+
+/* Input styles */
+.input {
+  @apply w-full px-4 py-2 border border-slate-300 rounded-lg;
+  @apply focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none;
+  @apply transition-all duration-200;
+}
+
+/* Card styles */
+.card {
+  @apply bg-white rounded-xl shadow-sm border border-slate-100 p-6;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-slate-100 rounded-full;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded-full hover:bg-slate-400;
+}
+
+/* Heatmap cell colors */
+.heatmap-cell {
+  @apply rounded transition-all duration-200 cursor-pointer;
+}
+
+.heatmap-0 { @apply bg-slate-100; }
+.heatmap-1 { @apply bg-green-100; }
+.heatmap-2 { @apply bg-green-200; }
+.heatmap-3 { @apply bg-green-300; }
+.heatmap-4 { @apply bg-green-400; }
+.heatmap-5 { @apply bg-green-500; }
