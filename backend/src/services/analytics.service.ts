@@ -207,6 +207,84 @@ export class AnalyticsService {
                 : 0,
         };
     }
+
+    /**
+     * Get dashboard stats for manager (Morning Huddle)
+     */
+    getDashboardStats(orgId: string): any {
+        // Daily stats for Team Energy
+        const dailyStats = query<{
+            total_talk_seconds: string;
+            total_calls: string;
+            answered_calls: string;
+        }>(
+            pgToSqlite(`SELECT 
+                COALESCE(SUM(duration_seconds), 0) as total_talk_seconds,
+                COUNT(*) as total_calls,
+                SUM(CASE WHEN is_answered = 1 THEN 1 ELSE 0 END) as answered_calls
+             FROM calls
+             WHERE org_id = ? AND started_at > datetime('now', 'start of day')`),
+            [orgId]
+        );
+
+        // Revenue Leakage (Missed calls from leads who haven't been called back)
+        // Logic: Missed calls where NO successful outgoing call happened afterwards to the same number
+        const leakageStats = query<{
+            missed_calls: string;
+        }>(
+            pgToSqlite(`SELECT COUNT(*) as missed_calls
+             FROM calls c
+             WHERE c.org_id = ? 
+             AND c.is_answered = 0 
+             AND c.direction = 'incoming'
+             AND c.started_at > datetime('now', 'start of day')
+             AND NOT EXISTS (
+                SELECT 1 FROM calls c2 
+                WHERE c2.to_number = c.from_number 
+                AND c2.started_at > c.started_at 
+                AND c2.is_answered = 1
+             )`),
+            [orgId]
+        );
+
+        // Active Agents (simulated from recent activity)
+        const activeAgents = query<{
+            id: string;
+            first_name: string;
+            last_name: string;
+            status: string;
+        }>(
+            pgToSqlite(`SELECT DISTINCT u.id, u.first_name, u.last_name, 'On Call' as status
+             FROM calls c
+             JOIN users u ON c.rep_id = u.id
+             WHERE c.org_id = ? AND c.status = 'in-progress'`),
+            [orgId]
+        );
+
+        const totalTalkSeconds = parseInt(dailyStats[0]?.total_talk_seconds || '0', 10);
+        const hours = Math.floor(totalTalkSeconds / 3600);
+        const minutes = Math.floor((totalTalkSeconds % 3600) / 60);
+
+        const missedCount = parseInt(leakageStats[0]?.missed_calls || '0', 10);
+
+        return {
+            teamEnergy: {
+                totalTalkTime: `${hours}h ${minutes}m`,
+                trend: '+12%', // Todo: Calculate vs yesterday
+                status: totalTalkSeconds > 3600 ? 'High Energy' : 'Warming Up'
+            },
+            revenueLeakage: {
+                missedCalls: missedCount,
+                potentialLoss: `₹${(missedCount * 2500).toLocaleString()}`, // Assume 2.5k per lead value
+                details: `${missedCount} High-value leads missed this morning.`
+            },
+            activeAgents: activeAgents.map(a => ({
+                name: `${a.first_name} ${a.last_name}`,
+                status: a.status,
+                avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${a.first_name}`
+            }))
+        };
+    }
 }
 
 // Singleton instance

@@ -21,10 +21,11 @@ CREATE TABLE IF NOT EXISTS organizations (
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
     org_id TEXT NOT NULL REFERENCES organizations(id),
-    email TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
     first_name TEXT NOT NULL,
     last_name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    emp_number TEXT UNIQUE, -- Callyzer Employee Number
+    password_hash TEXT NOT NULL,
     role TEXT CHECK(role IN ('admin', 'manager', 'rep')) DEFAULT 'rep',
     is_active INTEGER DEFAULT 1,
     lead_assignment_weight INTEGER DEFAULT 1,
@@ -67,6 +68,7 @@ CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
 -- ============================================
 CREATE TABLE IF NOT EXISTS calls (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    callyzer_id TEXT UNIQUE, -- Callyzer UUID
     org_id TEXT NOT NULL REFERENCES organizations(id),
     rep_id TEXT NOT NULL REFERENCES users(id),
     lead_id TEXT REFERENCES leads(id),
@@ -103,6 +105,7 @@ CREATE TABLE IF NOT EXISTS call_analysis (
     action_items TEXT, -- JSON array stored as text
     keywords TEXT, -- JSON array stored as text
     topics TEXT, -- JSON array stored as text
+    next_action_date TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
 

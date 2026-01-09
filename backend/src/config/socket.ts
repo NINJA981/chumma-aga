@@ -111,6 +111,7 @@ export function emitCallActivity(
         type: 'call_made' | 'call_answered' | 'conversion';
         leadName?: string;
         duration?: number;
+        xpEarned?: number;
     }
 ): void {
     const warRoomNs = io.of('/warroom');
@@ -125,7 +126,7 @@ export function emitMilestone(
     milestone: {
         repId: string;
         repName: string;
-        type: 'calls_milestone' | 'conversion' | 'top_rank';
+        type: 'calls_milestone' | 'conversion' | 'top_rank' | 'speed_bonus' | 'quality_bonus';
         value: number;
         message: string;
     }

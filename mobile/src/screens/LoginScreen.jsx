@@ -12,11 +12,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authApi } from '../services/api';
 
-interface LoginScreenProps {
-    onLoginSuccess: () => void;
-}
-
-export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
+export function LoginScreen({ onLoginSuccess }) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -37,7 +33,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
             await AsyncStorage.setItem('token', token);
             onLoginSuccess();
-        } catch (err: any) {
+        } catch (err) {
             setError(err.response?.data?.error || 'Login failed');
         } finally {
             setLoading(false);

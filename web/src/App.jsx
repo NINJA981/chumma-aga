@@ -7,6 +7,8 @@ import Leads from './pages/Leads';
 import Leaderboard from './pages/Leaderboard';
 import WarRoom from './pages/WarRoom';
 import Analytics from './pages/Analytics';
+import Login from './pages/Login';
+import { Navigate } from 'react-router-dom';
 
 function ProtectedRoute({ children }) {
     const { isAuthenticated, loading } = useAuth();
@@ -20,11 +22,7 @@ function ProtectedRoute({ children }) {
     }
 
     if (!isAuthenticated) {
-        return (
-            <div className="min-h-screen flex items-center justify-center text-slate-400">
-                Unable to authenticate with demo server.
-            </div>
-        );
+        return <Navigate to="/login" replace />;
     }
 
     return <>{children}</>;
@@ -36,6 +34,7 @@ function App() {
             <AuthProvider>
                 <SocketProvider>
                     <Routes>
+                        <Route path="/login" element={<Login />} />
                         <Route
                             path="/*"
                             element={

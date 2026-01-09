@@ -1,11 +1,22 @@
 import { Router, Request, Response } from 'express';
 import { query, pgToSqlite } from '../config/database.js';
+import { analyticsService } from '../services/analytics.service.js';
 import { authenticate, requireManager } from '../middleware/auth.js';
 
 const router = Router();
 router.use(authenticate);
 
 // GET /api/analytics/team - Team performance overview
+router.get('/dashboard-stats', requireManager, async (req: Request, res: Response) => {
+    try {
+        const result = analyticsService.getDashboardStats(req.user!.orgId);
+        res.json(result);
+    } catch (error) {
+        console.error('Dashboard stats error:', error);
+        res.status(500).json({ error: 'Failed to fetch dashboard stats' });
+    }
+});
+
 router.get('/team', requireManager, async (req: Request, res: Response) => {
     try {
         const { period = '30d' } = req.query;
@@ -207,6 +218,34 @@ router.get('/rep/:id', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Rep stats error:', error);
         res.status(500).json({ error: 'Failed to fetch rep stats' });
+    }
+});
+
+
+
+// GET /api/analytics/fake-reporting
+router.get('/fake-reporting', requireManager, async (req: Request, res: Response) => {
+    try {
+        const suspicious = query(
+            pgToSqlite(`SELECT 
+                u.id, u.first_name, u.last_name,
+                COUNT(*) as suspicious_calls
+            FROM calls c
+            JOIN users u ON c.rep_id = u.id
+            WHERE c.org_id = $1 
+              AND c.duration_seconds < 5 
+              AND c.call_type = 'outbound'
+              AND c.started_at > NOW() - INTERVAL '7 days'
+            GROUP BY u.id
+            HAVING COUNT(*) > 5
+            ORDER BY suspicious_calls DESC`),
+            [req.user!.orgId]
+        );
+
+        res.json({ suspicious });
+    } catch (error) {
+        console.error('Fake reporting check error:', error);
+        res.status(500).json({ error: 'Failed to fetch fake reporting data' });
     }
 });
 

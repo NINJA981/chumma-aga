@@ -53,6 +53,14 @@ export class AnalyticsController {
         const result = analyticsService.getRepAnalytics(repId, req.user!.orgId, period);
         res.json(result);
     });
+
+    /**
+     * GET /api/analytics/dashboard-stats
+     */
+    getDashboardStats = asyncHandler(async (req: Request, res: Response) => {
+        const result = analyticsService.getDashboardStats(req.user!.orgId);
+        res.json(result);
+    });
 }
 
 // Singleton instance

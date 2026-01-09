@@ -10,19 +10,8 @@ import {
 } from 'react-native';
 import { leadsApi } from '../services/api';
 
-interface Lead {
-    id: string;
-    first_name: string;
-    last_name: string;
-    phone: string;
-    company: string;
-    status: string;
-    optimal_call_hour?: number;
-    pickup_probability?: number;
-}
-
 export function LeadsScreen() {
-    const [leads, setLeads] = useState<Lead[]>([]);
+    const [leads, setLeads] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -47,12 +36,12 @@ export function LeadsScreen() {
         setRefreshing(false);
     }, []);
 
-    const handleCall = (phone: string) => {
+    const handleCall = (phone) => {
         Linking.openURL(`tel:${phone}`);
     };
 
-    const getStatusColor = (status: string) => {
-        const colors: Record<string, string> = {
+    const getStatusColor = (status) => {
+        const colors = {
             new: '#3b82f6',
             contacted: '#f59e0b',
             qualified: '#8b5cf6',
@@ -62,7 +51,7 @@ export function LeadsScreen() {
         return colors[status] || '#6b7280';
     };
 
-    const renderLead = ({ item }: { item: Lead }) => (
+    const renderLead = ({ item }) => (
         <Pressable style={styles.leadCard} onPress={() => handleCall(item.phone)}>
             <View style={styles.leadHeader}>
                 <View style={styles.avatar}>

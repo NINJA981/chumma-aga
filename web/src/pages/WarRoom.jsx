@@ -1,221 +1,189 @@
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { analyticsApi } from '../services/api';
-import { useSocket } from '../context/SocketContext';
-import {
-    Swords,
-    Phone,
-    PhoneCall,
-    Target,
-    Zap,
-    Clock,
-    TrendingUp,
-} from 'lucide-react';
+import { Phone, Clock, AlertCircle, PlayCircle, Smile, Frown, Meh, Zap } from 'lucide-react';
+import BentoCard from '../components/ui/BentoCard';
+import KineticText from '../components/ui/KineticText';
+import { warRoomFeed } from '../utils/mockData';
 
-export default function WarRoom() {
-    const [todayCalls, setTodayCalls] = useState(0);
-    const [todayConversions, setTodayConversions] = useState(0);
-    const [recentActivity, setRecentActivity] = useState([]);
-    const [activeReps, setActiveReps] = useState([]);
-    const [milestones, setMilestones] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const { warRoomSocket } = useSocket();
+const coachingScenarios = {
+    pricing: {
+        trigger: "Pricing Objection",
+        script: "We can offer a 5% discount if you close before EOM...",
+        sentiment: 'negative'
+    },
+    competito: {
+        trigger: "Competitor Mention",
+        script: "Highlight our superior AI analytics and 24/7 support.",
+        sentiment: 'neutral'
+    },
+    feature: {
+        trigger: "Feature Request",
+        script: "That is on our roadmap for Q3! We can add you to beta.",
+        sentiment: 'positive'
+    },
+    closing: {
+        trigger: "Closing Signal",
+        script: "Ask for the sale now! 'Should we send the contract?'",
+        sentiment: 'positive'
+    }
+};
 
+const WarRoom = () => {
+    const [calls, setCalls] = useState(warRoomFeed);
+    const [activeCoaching, setActiveCoaching] = useState(coachingScenarios.pricing);
+    const [activeAgent, setActiveAgent] = useState('Arjun');
+
+    // Simulate incoming calls and dynamic coaching
     useEffect(() => {
-        loadWarRoomData();
+        const interval = setInterval(() => {
+            const scenarios = Object.keys(coachingScenarios);
+            const randomScenarioKey = scenarios[Math.floor(Math.random() * scenarios.length)];
+            const newCoaching = coachingScenarios[randomScenarioKey];
+
+            setActiveCoaching(newCoaching);
+            setActiveAgent(Math.random() > 0.5 ? 'Arjun' : 'Priya');
+
+            const newCall = {
+                id: Date.now(),
+                agent: Math.random() > 0.5 ? 'Suresh Iyer' : 'Ananya Das',
+                lead: Math.random() > 0.5 ? 'Incoming Lead...' : 'Verified Customer',
+                status: 'Incoming',
+                duration: '00:00',
+                summary: 'Connecting...',
+                timestamp: 'Live',
+                sentiment: 'neutral'
+            };
+            setCalls(prev => [newCall, ...prev.slice(0, 5)]); // Keep waiting list short
+        }, 6000); // Faster updates for energy
+        return () => clearInterval(interval);
     }, []);
 
-    useEffect(() => {
-        if (warRoomSocket) {
-            warRoomSocket.on('activity', (activity) => {
-                setRecentActivity((prev) => [activity, ...prev].slice(0, 20));
-                if (activity.type === 'call_made' || activity.type === 'call_answered') {
-                    setTodayCalls((prev) => prev + 1);
-                }
-                if (activity.type === 'conversion') {
-                    setTodayConversions((prev) => prev + 1);
-                }
-            });
-
-            warRoomSocket.on('milestone', (milestone) => {
-                setMilestones((prev) => [milestone, ...prev].slice(0, 5));
-                // Auto-remove after 10 seconds
-                setTimeout(() => {
-                    setMilestones((prev) => prev.filter((m) => m !== milestone));
-                }, 10000);
-            });
-
-            return () => {
-                warRoomSocket.off('activity');
-                warRoomSocket.off('milestone');
-            };
-        }
-    }, [warRoomSocket]);
-
-    const loadWarRoomData = async () => {
-        try {
-            const response = await analyticsApi.warRoom();
-            setTodayCalls(response.data.todayCalls);
-            setTodayConversions(response.data.todayConversions);
-            setRecentActivity(response.data.recentActivity);
-            setActiveReps(response.data.activeReps);
-        } catch (error) {
-            console.error('Failed to load war room data:', error);
-        } finally {
-            setLoading(false);
-        }
+    const getSentimentIcon = (sentiment) => {
+        if (sentiment === 'positive') return <Smile className="text-emerald-500" size={18} />;
+        if (sentiment === 'negative') return <Frown className="text-red-500" size={18} />;
+        return <Meh className="text-slate-400" size={18} />;
     };
-
-    const getActivityIcon = (activity) => {
-        if (activity.disposition === 'converted') {
-            return <Target className="text-emerald-400" size={18} />;
-        }
-        if (activity.is_answered) {
-            return <PhoneCall className="text-green-400" size={18} />;
-        }
-        return <Phone className="text-blue-400" size={18} />;
-    };
-
-    const formatTime = (dateStr) => {
-        const date = new Date(dateStr);
-        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    };
-
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" />
-            </div>
-        );
-    }
 
     return (
-        <div className="min-h-screen -m-8 p-8 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-3">
-                    <div className="p-3 bg-indigo-600/20 rounded-xl">
-                        <Swords className="text-indigo-400" size={28} />
+        <div className="p-8 max-w-7xl mx-auto h-[calc(100vh-2rem)] flex flex-col">
+            <header className="mb-8 flex justify-between items-end">
+                <div>
+                    <div className="flex items-center space-x-3">
+                        <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+                        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Live War Room</h1>
                     </div>
-                    <div>
-                        <h1 className="text-2xl font-bold">Sales War Room</h1>
-                        <p className="text-slate-400">Real-time team activity</p>
-                    </div>
+                    <p className="text-slate-500">Real-time floor activty and AI insights.</p>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-green-400">
-                    <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                    LIVE
+                <div className="flex items-center space-x-2 bg-slate-100 px-3 py-1 rounded-full text-xs font-medium text-slate-600">
+                    <Zap size={14} className="text-yellow-500 fill-yellow-500" />
+                    <span>AI Analysis Active</span>
                 </div>
-            </div>
+            </header>
 
-            {/* Milestone Celebrations */}
-            <AnimatePresence>
-                {milestones.map((milestone, idx) => (
-                    <motion.div
-                        key={`${milestone.repId}-${idx}`}
-                        initial={{ opacity: 0, y: -50, scale: 0.8 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.8 }}
-                        className="celebration mb-4 p-4 bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-xl flex items-center gap-4"
-                    >
-                        <Zap className="text-amber-400" size={24} />
-                        <span className="text-lg font-medium">{milestone.message}</span>
-                    </motion.div>
-                ))}
-            </AnimatePresence>
-
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="glass-card-dark p-6">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-blue-500/20 rounded-xl">
-                            <Phone className="text-blue-400" size={24} />
-                        </div>
-                        <div>
-                            <p className="text-sm text-slate-400">Today's Calls</p>
-                            <p className="text-3xl font-bold">{todayCalls}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="glass-card-dark p-6">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-emerald-500/20 rounded-xl">
-                            <Target className="text-emerald-400" size={24} />
-                        </div>
-                        <div>
-                            <p className="text-sm text-slate-400">Conversions</p>
-                            <p className="text-3xl font-bold">{todayConversions}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="glass-card-dark p-6">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-purple-500/20 rounded-xl">
-                            <TrendingUp className="text-purple-400" size={24} />
-                        </div>
-                        <div>
-                            <p className="text-sm text-slate-400">Active Reps</p>
-                            <p className="text-3xl font-bold">{activeReps.length}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Activity Feed */}
-            <div className="glass-card-dark p-6">
-                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <Clock size={20} className="text-slate-400" />
-                    Live Activity Feed
-                </h2>
-
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                    <AnimatePresence mode="popLayout">
-                        {recentActivity.map((activity, idx) => (
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-8 overflow-hidden">
+                {/* Live Feed Column */}
+                <div className="lg:col-span-2 space-y-4 overflow-y-auto pr-2 pb-20">
+                    <AnimatePresence initial={false}>
+                        {calls.map((call) => (
                             <motion.div
-                                key={activity.id || idx}
-                                layout
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: 20 }}
-                                className="flex items-center gap-4 p-3 bg-slate-800/50 rounded-lg"
+                                key={call.id}
+                                initial={{ opacity: 0, x: -20, height: 0 }}
+                                animate={{ opacity: 1, x: 0, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ type: "spring", stiffness: 300, damping: 30 }}
                             >
-                                {getActivityIcon(activity)}
-                                <div className="flex-1">
-                                    <p className="text-sm">
-                                        <span className="font-medium text-white">
-                                            {activity.rep_first_name} {activity.rep_last_name}
-                                        </span>
-                                        <span className="text-slate-400">
-                                            {activity.is_answered ? ' connected with ' : ' called '}
-                                        </span>
-                                        <span className="text-slate-300">
-                                            {activity.lead_first_name
-                                                ? `${activity.lead_first_name} ${activity.lead_last_name}`
-                                                : 'Unknown Lead'}
-                                        </span>
-                                    </p>
-                                    {activity.duration_seconds > 0 && (
-                                        <p className="text-xs text-slate-500">
-                                            Duration: {Math.round(activity.duration_seconds / 60)}m {activity.duration_seconds % 60}s
-                                        </p>
-                                    )}
+                                <div className={`p-5 rounded-2xl border mb-3 shadow-sm transition-all hover:shadow-md ${call.status === 'Incoming' ? 'bg-indigo-50 border-indigo-100' :
+                                        call.status === 'Missed' ? 'bg-red-50 border-red-100' :
+                                            'bg-white border-slate-100'
+                                    }`}>
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex items-start space-x-4">
+                                            <div className={`p-3 rounded-xl ${call.status === 'Incoming' ? 'bg-indigo-100 text-indigo-600 animate-bounce' :
+                                                    call.status === 'Missed' ? 'bg-red-100 text-red-600' :
+                                                        'bg-slate-100 text-slate-600'
+                                                }`}>
+                                                <Phone size={20} />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center space-x-2">
+                                                    <h3 className="font-bold text-slate-800">{call.agent}</h3>
+                                                    <span className="text-slate-400 text-sm">•</span>
+                                                    <span className="font-medium text-slate-600">{call.lead}</span>
+                                                </div>
+
+                                                {/* Kinetic Status */}
+                                                <div className={`mt-1 font-semibold flex items-center gap-2 ${call.status === 'Incoming' ? 'text-indigo-600' :
+                                                        call.status === 'Missed' ? 'text-red-600' :
+                                                            'text-emerald-600'
+                                                    }`}>
+                                                    {call.status === 'Incoming' ? (
+                                                        <KineticText text="Incoming Call..." />
+                                                    ) : call.status}
+                                                </div>
+
+                                                <p className="text-slate-500 text-sm mt-2 max-w-md">
+                                                    {call.summary}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right flex flex-col items-end">
+                                            <div className="text-2xl font-mono font-medium text-slate-700">
+                                                {call.duration}
+                                            </div>
+                                            <span className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-2">{call.timestamp}</span>
+                                            {/* Sentiment Indicator */}
+                                            {call.status !== 'Incoming' && (
+                                                <div title="Call Sentiment">
+                                                    {getSentimentIcon(Math.random() > 0.6 ? 'positive' : Math.random() > 0.3 ? 'neutral' : 'negative')}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                                <span className="text-xs text-slate-500">
-                                    {formatTime(activity.started_at)}
-                                </span>
                             </motion.div>
                         ))}
                     </AnimatePresence>
+                </div>
 
-                    {recentActivity.length === 0 && (
-                        <p className="text-center text-slate-500 py-8">
-                            No activity yet. Make some calls to see them here!
+                {/* Sidebar Stats / Active Agents */}
+                <div className="space-y-6">
+                    <BentoCard title="Floor Status" className="bg-slate-900 text-white border-none">
+                        <div className="grid grid-cols-2 gap-4 mt-4">
+                            <div className="bg-slate-800/50 p-4 rounded-2xl">
+                                <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Active Calls</div>
+                                <div className="text-3xl font-bold">12</div>
+                            </div>
+                            <div className="bg-slate-800/50 p-4 rounded-2xl">
+                                <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Waiting</div>
+                                <div className="text-3xl font-bold text-emerald-400">0</div>
+                            </div>
+                        </div>
+                    </BentoCard>
+
+                    <motion.div
+                        initial={{ scale: 0.95, opacity: 0.5 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        key={activeCoaching.trigger} // Re-animate on change
+                        className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2rem] p-6 text-white shadow-xl shadow-indigo-200 relative overflow-hidden"
+                    >
+                        <div className="absolute top-0 right-0 p-4 opacity-20">
+                            <Zap size={100} />
+                        </div>
+
+                        <h3 className="font-bold text-lg mb-4 flex items-center relative z-10">
+                            <PlayCircle className="mr-2" /> Live Coaching
+                        </h3>
+                        <p className="text-indigo-100 text-sm mb-4 relative z-10">
+                            detected <span className="font-bold text-white bg-white/20 px-1 rounded">{activeCoaching.trigger}</span> in <span className="font-bold text-white">{activeAgent}'s</span> voice.
                         </p>
-                    )}
+                        <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/20 text-xs font-mono relative z-10">
+                            "{activeCoaching.script}"
+                        </div>
+                    </motion.div>
                 </div>
             </div>
         </div>
     );
-}
+};
+
+export default WarRoom;

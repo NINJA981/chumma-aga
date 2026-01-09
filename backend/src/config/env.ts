@@ -13,6 +13,7 @@ const envSchema = z.object({
     TWILIO_AUTH_TOKEN: z.string().optional(),
     TWILIO_PHONE_NUMBER: z.string().optional(),
     GEMINI_API_KEY: z.string().optional(),
+    CALLYZER_SIGNING_SECRET: z.string().optional(),
     FRONTEND_URL: z.string().default('http://localhost:3000'),
 });
 
@@ -46,6 +47,10 @@ export const config = {
 
     gemini: {
         apiKey: parsed.data.GEMINI_API_KEY,
+    },
+
+    callyzer: {
+        signingSecret: parsed.data.CALLYZER_SIGNING_SECRET,
     },
 
     cors: {

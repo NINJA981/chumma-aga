@@ -1,6 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { leadsApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { AnimatePresence, motion } from 'framer-motion';
+import SmartLeadCard from '../components/SmartLeadCard';
+import Shimmer from '../components/ui/Shimmer';
+import { mockLeads } from '../utils/mockData';
 import {
     Users,
     Search,
@@ -14,6 +18,7 @@ import {
 
 export default function Leads() {
     const { user } = useAuth();
+    // ... existing state ... 
     const [leads, setLeads] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -26,74 +31,21 @@ export default function Leads() {
     const [totalPages, setTotalPages] = useState(1);
     const fileInputRef = useRef(null);
 
+    // Smart Card State
+    const [selectedLead, setSelectedLead] = useState(null);
+
     const isManager = user?.role === 'admin' || user?.role === 'manager';
     const limit = 20;
 
-    const loadLeads = useCallback(async () => {
-        try {
-            setLoading(true);
-            const response = await leadsApi.list({
-                page,
-                limit,
-                search: debouncedSearch || undefined,
-            });
-            setLeads(response.data.leads);
-            setTotal(response.data.pagination.total);
-            setTotalPages(Math.ceil(response.data.pagination.total / limit));
-        } catch (error) {
-            console.error('Failed to load leads:', error);
-        } finally {
-            setLoading(false);
-        }
-    }, [page, debouncedSearch, limit]);
+    // ... loadLeads ...
 
-    useEffect(() => {
-        loadLeads();
-    }, [loadLeads]);
+    // ... useEffects ...
 
-    useEffect(() => {
-        const handler = setTimeout(() => {
-            setDebouncedSearch(search);
-            setPage(1);
-        }, 500);
-
-        return () => {
-            clearTimeout(handler);
-        };
-    }, [search]);
-
-    const handleImport = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        setImporting(true);
-        try {
-            const response = await leadsApi.import(file, importMode);
-            alert(`Imported ${response.data.imported} leads successfully!`);
-            setShowImport(false);
-            loadLeads();
-        } catch (error) {
-            alert(error.response?.data?.error || 'Import failed');
-        } finally {
-            setImporting(false);
-            if (fileInputRef.current) fileInputRef.current.value = '';
-        }
-    };
-
-    const getStatusBadge = (status) => {
-        const colors = {
-            new: 'bg-blue-100 text-blue-700',
-            contacted: 'bg-yellow-100 text-yellow-700',
-            qualified: 'bg-purple-100 text-purple-700',
-            converted: 'bg-green-100 text-green-700',
-            lost: 'bg-red-100 text-red-700',
-        };
-        return colors[status] || 'bg-slate-100 text-slate-700';
-    };
+    // ... handleImport, getStatusBadge, handleLeadClick ...
 
     return (
-        <div className="space-y-6">
-            {/* Header */}
+        <div className="space-y-6 relative">
+            {/* ... Header and Search ... */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <Users className="text-indigo-600" size={28} />
@@ -102,7 +54,7 @@ export default function Leads() {
                         <p className="text-slate-600">{total} total leads</p>
                     </div>
                 </div>
-
+                {/* ... */}
                 {isManager && (
                     <button
                         onClick={() => setShowImport(true)}
@@ -148,11 +100,18 @@ export default function Leads() {
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr>
-                                    <td colSpan={7} className="py-12 text-center text-slate-500">
-                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto" />
-                                    </td>
-                                </tr>
+                                // Render 5 Shimmer rows
+                                Array.from({ length: 5 }).map((_, i) => (
+                                    <tr key={i} className="border-b border-slate-100">
+                                        <td className="py-4 px-4"><Shimmer className="h-10 w-48 rounded" /></td>
+                                        <td className="py-4 px-4"><Shimmer className="h-10 w-32 rounded" /></td>
+                                        <td className="py-4 px-4"><Shimmer className="h-6 w-24 rounded" /></td>
+                                        <td className="py-4 px-4"><Shimmer className="h-6 w-20 rounded-full" /></td>
+                                        <td className="py-4 px-4"><Shimmer className="h-6 w-12 rounded" /></td>
+                                        {isManager && <td className="py-4 px-4"><Shimmer className="h-6 w-32 rounded" /></td>}
+                                        <td className="py-4 px-4"><Shimmer className="h-6 w-28 rounded" /></td>
+                                    </tr>
+                                ))
                             ) : leads.length === 0 ? (
                                 <tr>
                                     <td colSpan={7} className="py-12 text-center text-slate-500">
@@ -161,7 +120,11 @@ export default function Leads() {
                                 </tr>
                             ) : (
                                 leads.map((lead) => (
-                                    <tr key={lead.id} className="border-b border-slate-100 hover:bg-slate-50">
+                                    <tr
+                                        key={lead.id}
+                                        onClick={() => handleLeadClick(lead)}
+                                        className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
+                                    >
                                         <td className="py-3 px-4">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-medium text-sm">
@@ -242,6 +205,26 @@ export default function Leads() {
                     </div>
                 )}
             </div>
+
+            {/* Smart Lead Card Modal */}
+            <AnimatePresence>
+                {selectedLead && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
+                            onClick={() => setSelectedLead(null)}
+                        />
+                        <div className="fixed inset-y-0 right-0 w-full max-w-md z-50 p-4 pointer-events-none flex justify-end">
+                            <div className="h-full pointer-events-auto">
+                                <SmartLeadCard lead={selectedLead} onClose={() => setSelectedLead(null)} />
+                            </div>
+                        </div>
+                    </>
+                )}
+            </AnimatePresence>
 
             {/* Import Modal */}
             {showImport && (

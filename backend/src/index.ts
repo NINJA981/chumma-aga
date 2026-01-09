@@ -14,6 +14,7 @@ import callsRouter from './routes/calls.js';
 import analyticsRouter from './routes/analytics.js';
 import leaderboardRouter from './routes/leaderboard.js';
 import aiRouter from './routes/ai.js';
+import webhookRouter from './routes/webhooks.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -53,7 +54,9 @@ app.use('/api/leads', leadsRouter);
 app.use('/api/calls', callsRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/leaderboard', leaderboardRouter);
+app.use('/api/leaderboard', leaderboardRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/webhooks', webhookRouter);
 
 // Error handling
 app.use(notFoundHandler);

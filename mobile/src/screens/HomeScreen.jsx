@@ -12,11 +12,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GhostSyncService } from '../services/GhostSyncService';
 
-interface HomeScreenProps {
-    onLogout: () => void;
-}
-
-export function HomeScreen({ onLogout }: HomeScreenProps) {
+export function HomeScreen({ onLogout }) {
     const [ghostSyncEnabled, setGhostSyncEnabled] = useState(false);
     const [syncCount, setSyncCount] = useState(0);
     const [syncing, setSyncing] = useState(false);
@@ -29,7 +25,7 @@ export function HomeScreen({ onLogout }: HomeScreenProps) {
         setGhostSyncEnabled(GhostSyncService.isRunning());
     };
 
-    const requestPermissions = async (): Promise<boolean> => {
+    const requestPermissions = async () => {
         if (Platform.OS !== 'android') return false;
 
         try {
@@ -48,7 +44,7 @@ export function HomeScreen({ onLogout }: HomeScreenProps) {
         }
     };
 
-    const toggleGhostSync = async (value: boolean) => {
+    const toggleGhostSync = async (value) => {
         if (value) {
             const hasPermission = await requestPermissions();
             if (!hasPermission) {
