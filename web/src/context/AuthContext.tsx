@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { api } from '../services/api';
+import { api, authApi } from '../services/api';
 
 interface User {
     id: string;
@@ -27,41 +27,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (token) {
-            api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-            fetchUser();
-        } else {
-            setLoading(false);
-        }
-    }, [token]);
+        checkAuth();
+    }, []);
 
-    const fetchUser = async () => {
+    const checkAuth = async () => {
+        const storedToken = localStorage.getItem('token');
+        if (storedToken) {
+            try {
+                // Verify token and get user details
+                const response = await authApi.me();
+                setUser(response.data.user);
+                setLoading(false);
+                return;
+            } catch (error) {
+                console.error('Auth verification failed:', error);
+                localStorage.removeItem('token');
+            }
+        }
+
+        // Auto-login with demo credentials
         try {
-            const response = await api.get('/auth/me');
-            setUser(response.data.user);
+            await login('admin@demo.com', 'password');
         } catch (error) {
-            localStorage.removeItem('token');
-            setToken(null);
-        } finally {
+            console.error('Auto-login failed:', error);
             setLoading(false);
         }
     };
 
     const login = async (email: string, password: string) => {
-        const response = await api.post('/auth/login', { email, password });
-        const { token: newToken, user: userData } = response.data;
+        setLoading(true);
+        try {
+            const response = await authApi.login(email, password);
+            const { token, user } = response.data;
 
-        localStorage.setItem('token', newToken);
-        setToken(newToken);
-        setUser(userData);
-        api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+            localStorage.setItem('token', token);
+            setToken(token);
+            setUser(user);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const logout = () => {
         localStorage.removeItem('token');
         setToken(null);
         setUser(null);
-        delete api.defaults.headers.common['Authorization'];
     };
 
     return (

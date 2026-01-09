@@ -26,47 +26,16 @@ export async function authenticate(
     res: Response,
     next: NextFunction
 ): Promise<void> {
-    try {
-        const authHeader = req.headers.authorization;
-
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            res.status(401).json({ error: 'No token provided' });
-            return;
-        }
-
-        const token = authHeader.substring(7);
-        const decoded = jwt.verify(token, config.jwt.secret) as { userId: string };
-
-        // Handle demo user bypass
-        if (decoded.userId === 'demo-user-id') {
-            req.user = {
-                id: 'demo-user-id',
-                orgId: 'demo-org-id',
-                email: 'demo@vocalpulse.com',
-                firstName: 'Demo',
-                lastName: 'User',
-                role: 'admin'
-            };
-            next();
-            return;
-        }
-
-        const user = await queryOne<AuthUser>(
-            `SELECT id, org_id as "orgId", email, role, first_name as "firstName", last_name as "lastName"
-       FROM users WHERE id = ? AND is_active = 1`,
-            [decoded.userId]
-        );
-
-        if (!user) {
-            res.status(401).json({ error: 'User not found' });
-            return;
-        }
-
-        req.user = user;
-        next();
-    } catch (error) {
-        res.status(401).json({ error: 'Invalid token' });
-    }
+    // ALWAYS bypass authentication and use demo user
+    req.user = {
+        id: 'demo-user-id',
+        orgId: 'demo-org-id',
+        email: 'demo@vocalpulse.com',
+        firstName: 'Demo',
+        lastName: 'User',
+        role: 'admin'
+    };
+    next();
 }
 
 export function requireRole(...roles: Array<'admin' | 'manager' | 'rep'>) {

@@ -21,10 +21,14 @@ import {
 
 interface RepStats {
     id: string;
-    firstName: string;
-    lastName: string;
-    calls: number;
-    conversions: number;
+    first_name: string;
+    last_name: string;
+    avatar_url?: string;
+    total_calls: string;
+    answered_calls: string;
+    total_talk_seconds: string;
+    avg_call_duration: string;
+    conversions: string;
 }
 
 interface DailyTrendData {

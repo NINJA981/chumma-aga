@@ -11,7 +11,7 @@
     "test:integration": "jest --config jest.integration.config.js",
     "lint": "eslint src --ext .ts",
     "db:migrate": "node scripts/migrate.js",
-    "db:seed": "node scripts/seed.js"
+    "db:seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

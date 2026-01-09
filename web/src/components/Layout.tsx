@@ -8,7 +8,6 @@ import {
     Trophy,
     Swords,
     BarChart3,
-    LogOut,
     Radio,
 } from 'lucide-react';
 
@@ -28,11 +27,6 @@ export default function Layout({ children }: LayoutProps) {
     const { user, logout } = useAuth();
     const { connected } = useSocket();
     const navigate = useNavigate();
-
-    const handleLogout = () => {
-        logout();
-        navigate('/login');
-    };
 
     return (
         <div className="min-h-screen bg-slate-50 flex">
@@ -77,16 +71,16 @@ export default function Layout({ children }: LayoutProps) {
                         </div>
                     </div>
 
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mt-auto">
                         <div className="flex items-center gap-2 text-sm">
                             <Radio size={14} className={connected ? 'text-green-400' : 'text-red-400'} />
                             <span className="text-slate-400">{connected ? 'Live' : 'Offline'}</span>
                         </div>
                         <button
-                            onClick={handleLogout}
-                            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                            onClick={logout}
+                            className="text-xs text-slate-400 hover:text-white transition-colors"
                         >
-                            <LogOut size={20} />
+                            Log Out
                         </button>
                     </div>
                 </div>

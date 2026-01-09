@@ -99,9 +99,15 @@ export function pgToSqlite(sql: string): string {
     result = result.replace(/\s=\s*false\b/gi, ' = 0');
 
     // Convert FILTER (WHERE ...) to CASE WHEN for COUNT/SUM
-    // COUNT(*) FILTER (WHERE condition) -> SUM(CASE WHEN condition THEN 1 ELSE 0 END)
-    result = result.replace(/COUNT\(\*\)\s*FILTER\s*\(\s*WHERE\s+([^)]+)\)/gi,
-        (match, condition) => `SUM(CASE WHEN ${condition} THEN 1 ELSE 0 END)`);
+    // COUNT(...) FILTER (WHERE condition) -> SUM(CASE WHEN condition THEN 1 ELSE 0 END)
+    // Supports COUNT(*) and COUNT(field)
+    result = result.replace(/COUNT\(([^)]+)\)\s*FILTER\s*\(\s*WHERE\s+([^)]+)\)/gi,
+        (match, countField, condition) => {
+            if (countField.trim() === '*') {
+                return `SUM(CASE WHEN ${condition} THEN 1 ELSE 0 END)`;
+            }
+            return `COUNT(CASE WHEN ${condition} THEN ${countField} ELSE NULL END)`;
+        });
 
     // AVG(...) FILTER (WHERE condition) -> needs subquery or CASE
     result = result.replace(/AVG\(([^)]+)\)\s*FILTER\s*\(\s*WHERE\s+([^)]+)\)/gi,

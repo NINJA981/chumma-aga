@@ -1,8 +1,7 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import Layout from './components/Layout';
-import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import Leaderboard from './pages/Leaderboard';
@@ -21,7 +20,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return (
+      <div className="min-h-screen flex items-center justify-center text-slate-400">
+        Unable to authenticate with demo server.
+      </div>
+    );
   }
 
   return <>{children}</>;
@@ -33,7 +36,6 @@ function App() {
       <AuthProvider>
         <SocketProvider>
           <Routes>
-            <Route path="/login" element={<Login />} />
             <Route
               path="/*"
               element={

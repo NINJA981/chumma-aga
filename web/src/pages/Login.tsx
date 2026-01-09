@@ -101,7 +101,7 @@ export default function Login() {
                 </div>
 
                 <p className="text-center text-slate-500 mt-6 text-sm">
-                    Demo: Use any email and password to create an account
+                    Demo: admin@demo.com / password
                 </p>
             </div>
         </div>

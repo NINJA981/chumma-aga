@@ -31,7 +31,7 @@ router.get('/team', requireManager, async (req: Request, res: Response) => {
         // Rep breakdown
         const repStats = query(
             pgToSqlite(`SELECT 
-        u.id, u.first_name, u.last_name, u.avatar_url,
+        u.id, u.first_name, u.last_name,
         COUNT(c.id) as total_calls,
         COUNT(c.id) FILTER (WHERE c.is_answered) as answered_calls,
         COALESCE(SUM(c.duration_seconds), 0) as total_talk_seconds,
@@ -141,7 +141,7 @@ router.get('/war-room', requireManager, async (req: Request, res: Response) => {
         const recentActivity = query(
             pgToSqlite(`SELECT 
         c.id, c.started_at, c.duration_seconds, c.is_answered, c.disposition,
-        u.first_name as rep_first_name, u.last_name as rep_last_name, u.avatar_url,
+        u.first_name as rep_first_name, u.last_name as rep_last_name,
         l.first_name as lead_first_name, l.last_name as lead_last_name
        FROM calls c
        JOIN users u ON c.rep_id = u.id
@@ -154,7 +154,7 @@ router.get('/war-room', requireManager, async (req: Request, res: Response) => {
 
         // Active reps (calls in last 30 min)
         const activeReps = query(
-            pgToSqlite(`SELECT DISTINCT u.id, u.first_name, u.last_name, u.avatar_url
+            pgToSqlite(`SELECT DISTINCT u.id, u.first_name, u.last_name
        FROM calls c
        JOIN users u ON c.rep_id = u.id
        WHERE c.org_id = $1 AND c.started_at > NOW() - INTERVAL '30 minutes'`),
