@@ -1,29 +1,11 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { api, authApi } from '../services/api';
+import { createContext, useContext, useState, useEffect } from 'react';
+import { authApi } from '../services/api';
 
-interface User {
-    id: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    role: 'admin' | 'manager' | 'rep';
-    orgId: string;
-}
+const AuthContext = createContext(undefined);
 
-interface AuthContextType {
-    user: User | null;
-    token: string | null;
-    isAuthenticated: boolean;
-    loading: boolean;
-    login: (email: string, password: string) => Promise<void>;
-    logout: () => void;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export function AuthProvider({ children }: { children: ReactNode }) {
-    const [user, setUser] = useState<User | null>(null);
-    const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+export function AuthProvider({ children }) {
+    const [user, setUser] = useState(null);
+    const [token, setToken] = useState(localStorage.getItem('token'));
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -54,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const login = async (email: string, password: string) => {
+    const login = async (email, password) => {
         setLoading(true);
         try {
             const response = await authApi.login(email, password);

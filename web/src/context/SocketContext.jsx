@@ -1,21 +1,14 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { createContext, useContext, useEffect, useState } from 'react';
+import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 
-interface SocketContextType {
-    socket: Socket | null;
-    leaderboardSocket: Socket | null;
-    warRoomSocket: Socket | null;
-    connected: boolean;
-}
+const SocketContext = createContext(undefined);
 
-const SocketContext = createContext<SocketContextType | undefined>(undefined);
-
-export function SocketProvider({ children }: { children: ReactNode }) {
+export function SocketProvider({ children }) {
     const { user, isAuthenticated } = useAuth();
-    const [socket, setSocket] = useState<Socket | null>(null);
-    const [leaderboardSocket, setLeaderboardSocket] = useState<Socket | null>(null);
-    const [warRoomSocket, setWarRoomSocket] = useState<Socket | null>(null);
+    const [socket, setSocket] = useState(null);
+    const [leaderboardSocket, setLeaderboardSocket] = useState(null);
+    const [warRoomSocket, setWarRoomSocket] = useState(null);
     const [connected, setConnected] = useState(false);
 
     useEffect(() => {

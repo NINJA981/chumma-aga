@@ -12,56 +12,40 @@ import {
     X,
 } from 'lucide-react';
 
-interface Lead {
-    id: string;
-    first_name: string;
-    last_name: string;
-    email: string;
-    phone: string;
-    company: string;
-    status: string;
-    call_count: number;
-    optimal_call_hour?: number;
-    optimal_call_day?: number;
-    pickup_probability?: number;
-    assigned_first_name?: string;
-    assigned_last_name?: string;
-}
-
 export default function Leads() {
     const { user } = useAuth();
-    const [leads, setLeads] = useState<Lead[]>([]);
+    const [leads, setLeads] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
     const [total, setTotal] = useState(0);
     const [showImport, setShowImport] = useState(false);
-    const [importMode, setImportMode] = useState<'round_robin' | 'weighted'>('round_robin');
+    const [importMode, setImportMode] = useState('round_robin');
     const [importing, setImporting] = useState(false);
     const [debouncedSearch, setDebouncedSearch] = useState(search);
     const [totalPages, setTotalPages] = useState(1);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const fileInputRef = useRef(null);
 
     const isManager = user?.role === 'admin' || user?.role === 'manager';
-    const limit = 20; // Original limit, but instruction uses 50 for totalPages calculation
+    const limit = 20;
 
     const loadLeads = useCallback(async () => {
         try {
             setLoading(true);
             const response = await leadsApi.list({
                 page,
-                limit, // Keep original limit for API call
+                limit,
                 search: debouncedSearch || undefined,
             });
             setLeads(response.data.leads);
-            setTotal(response.data.pagination.total); // Keep setting total for display
-            setTotalPages(Math.ceil(response.data.pagination.total / limit)); // Calculate totalPages based on actual limit
+            setTotal(response.data.pagination.total);
+            setTotalPages(Math.ceil(response.data.pagination.total / limit));
         } catch (error) {
             console.error('Failed to load leads:', error);
         } finally {
             setLoading(false);
         }
-    }, [page, debouncedSearch, limit]); // Add dependencies for useCallback
+    }, [page, debouncedSearch, limit]);
 
     useEffect(() => {
         loadLeads();
@@ -70,7 +54,7 @@ export default function Leads() {
     useEffect(() => {
         const handler = setTimeout(() => {
             setDebouncedSearch(search);
-            setPage(1); // Reset page when search changes
+            setPage(1);
         }, 500);
 
         return () => {
@@ -78,7 +62,7 @@ export default function Leads() {
         };
     }, [search]);
 
-    const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImport = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -88,7 +72,7 @@ export default function Leads() {
             alert(`Imported ${response.data.imported} leads successfully!`);
             setShowImport(false);
             loadLeads();
-        } catch (error: any) {
+        } catch (error) {
             alert(error.response?.data?.error || 'Import failed');
         } finally {
             setImporting(false);
@@ -96,8 +80,8 @@ export default function Leads() {
         }
     };
 
-    const getStatusBadge = (status: string) => {
-        const colors: Record<string, string> = {
+    const getStatusBadge = (status) => {
+        const colors = {
             new: 'bg-blue-100 text-blue-700',
             contacted: 'bg-yellow-100 text-yellow-700',
             qualified: 'bg-purple-100 text-purple-700',
@@ -106,8 +90,6 @@ export default function Leads() {
         };
         return colors[status] || 'bg-slate-100 text-slate-700';
     };
-
-
 
     return (
         <div className="space-y-6">
@@ -201,7 +183,7 @@ export default function Leads() {
                                         </td>
                                         <td className="py-3 px-4 text-slate-700">{lead.company || '-'}</td>
                                         <td className="py-3 px-4">
-                                            <span className={`inline - flex px - 2 py - 1 rounded - full text - xs font - medium capitalize ${getStatusBadge(lead.status)} `}>
+                                            <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium capitalize ${getStatusBadge(lead.status)}`}>
                                                 {lead.status}
                                             </span>
                                         </td>

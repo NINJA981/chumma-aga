@@ -11,7 +11,7 @@ export default function Login() {
     const { login } = useAuth();
     const navigate = useNavigate();
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setLoading(true);
@@ -19,7 +19,7 @@ export default function Login() {
         try {
             await login(email, password);
             navigate('/');
-        } catch (err: any) {
+        } catch (err) {
             setError(err.response?.data?.error || 'Login failed');
         } finally {
             setLoading(false);

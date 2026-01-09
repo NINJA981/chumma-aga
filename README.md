@@ -60,7 +60,7 @@ vocalpulse/
 
 ```bash
 # Clone the repository
-git clone https://github.com/Kamesh-A13/chumma.git
+git clone https://github.com/NINJA981/chumma-aga.git
 cd vocalpulse
 
 # Run the installer (Windows)

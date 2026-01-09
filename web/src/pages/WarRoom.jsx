@@ -12,41 +12,12 @@ import {
     TrendingUp,
 } from 'lucide-react';
 
-interface Activity {
-    id: string;
-    type: 'call_made' | 'call_answered' | 'conversion';
-    started_at: string;
-    duration_seconds: number;
-    is_answered: boolean;
-    disposition: string;
-    rep_first_name: string;
-    rep_last_name: string;
-    rep_avatar_url?: string;
-    lead_first_name?: string;
-    lead_last_name?: string;
-}
-
-interface Milestone {
-    repId: string;
-    repName: string;
-    type: string;
-    value: number;
-    message: string;
-}
-
-interface Rep {
-    id: string;
-    firstName: string;
-    lastName: string;
-    avatarUrl?: string;
-}
-
 export default function WarRoom() {
     const [todayCalls, setTodayCalls] = useState(0);
     const [todayConversions, setTodayConversions] = useState(0);
-    const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
-    const [activeReps, setActiveReps] = useState<Rep[]>([]);
-    const [milestones, setMilestones] = useState<Milestone[]>([]);
+    const [recentActivity, setRecentActivity] = useState([]);
+    const [activeReps, setActiveReps] = useState([]);
+    const [milestones, setMilestones] = useState([]);
     const [loading, setLoading] = useState(true);
     const { warRoomSocket } = useSocket();
 
@@ -56,7 +27,7 @@ export default function WarRoom() {
 
     useEffect(() => {
         if (warRoomSocket) {
-            warRoomSocket.on('activity', (activity: Activity) => {
+            warRoomSocket.on('activity', (activity) => {
                 setRecentActivity((prev) => [activity, ...prev].slice(0, 20));
                 if (activity.type === 'call_made' || activity.type === 'call_answered') {
                     setTodayCalls((prev) => prev + 1);
@@ -66,7 +37,7 @@ export default function WarRoom() {
                 }
             });
 
-            warRoomSocket.on('milestone', (milestone: Milestone) => {
+            warRoomSocket.on('milestone', (milestone) => {
                 setMilestones((prev) => [milestone, ...prev].slice(0, 5));
                 // Auto-remove after 10 seconds
                 setTimeout(() => {
@@ -95,7 +66,7 @@ export default function WarRoom() {
         }
     };
 
-    const getActivityIcon = (activity: Activity) => {
+    const getActivityIcon = (activity) => {
         if (activity.disposition === 'converted') {
             return <Target className="text-emerald-400" size={18} />;
         }
@@ -105,7 +76,7 @@ export default function WarRoom() {
         return <Phone className="text-blue-400" size={18} />;
     };
 
-    const formatTime = (dateStr: string) => {
+    const formatTime = (dateStr) => {
         const date = new Date(dateStr);
         return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     };

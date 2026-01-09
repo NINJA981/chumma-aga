@@ -2,16 +2,8 @@ import { useEffect, useState } from 'react';
 import { analyticsApi } from '../services/api';
 import { BarChart3, Clock, Flame } from 'lucide-react';
 
-interface HeatmapData {
-    grid: number[][];
-    attempts: number[][];
-    bestTimes: any[];
-    days: string[];
-    hours: string[];
-}
-
 export default function Analytics() {
-    const [heatmap, setHeatmap] = useState<HeatmapData | null>(null);
+    const [heatmap, setHeatmap] = useState(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -29,7 +21,7 @@ export default function Analytics() {
         }
     };
 
-    const getHeatmapColor = (value: number): string => {
+    const getHeatmapColor = (value) => {
         if (value === 0) return 'bg-slate-100';
         if (value < 20) return 'bg-green-100';
         if (value < 40) return 'bg-green-200';
@@ -65,7 +57,7 @@ export default function Analytics() {
                         <h2 className="text-lg font-semibold text-slate-900">Best Times to Call</h2>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {heatmap.bestTimes.slice(0, 3).map((time: any, idx: number) => (
+                        {heatmap.bestTimes.slice(0, 3).map((time, idx) => (
                             <div key={idx} className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-4">
                                 <div className="flex items-center gap-2 mb-2">
                                     <Clock className="text-indigo-600" size={16} />

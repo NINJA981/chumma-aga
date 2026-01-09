@@ -4,30 +4,10 @@ import { leaderboardApi } from '../services/api';
 import { useSocket } from '../context/SocketContext';
 import { Trophy, TrendingUp, Sparkles, ChevronRight } from 'lucide-react';
 
-interface RepRanking {
-    repId: string;
-    xp: number;
-    rank: number;
-    firstName: string;
-    lastName: string;
-    avatarUrl?: string;
-}
-
-interface RepDetails {
-    xp: number;
-    rank: number;
-    totalCalls: number;
-    answeredCalls: number;
-    talkMinutes: number;
-    conversions: number;
-    conversionRatio: number;
-    aiCoachingTip?: string;
-}
-
 export default function Leaderboard() {
-    const [rankings, setRankings] = useState<RepRanking[]>([]);
-    const [selectedRep, setSelectedRep] = useState<string | null>(null);
-    const [repDetails, setRepDetails] = useState<RepDetails | null>(null);
+    const [rankings, setRankings] = useState([]);
+    const [selectedRep, setSelectedRep] = useState(null);
+    const [repDetails, setRepDetails] = useState(null);
     const [loading, setLoading] = useState(true);
     const { leaderboardSocket } = useSocket();
 
@@ -37,7 +17,7 @@ export default function Leaderboard() {
 
     useEffect(() => {
         if (leaderboardSocket) {
-            leaderboardSocket.on('rank_update', (newRankings: RepRanking[]) => {
+            leaderboardSocket.on('rank_update', (newRankings) => {
                 setRankings(newRankings);
             });
 
@@ -58,7 +38,7 @@ export default function Leaderboard() {
         }
     };
 
-    const loadRepDetails = async (repId: string) => {
+    const loadRepDetails = async (repId) => {
         try {
             const response = await leaderboardApi.rep(repId);
             setRepDetails(response.data);
@@ -67,7 +47,7 @@ export default function Leaderboard() {
         }
     };
 
-    const handleRepClick = (repId: string) => {
+    const handleRepClick = (repId) => {
         if (selectedRep === repId) {
             setSelectedRep(null);
             setRepDetails(null);
@@ -77,7 +57,7 @@ export default function Leaderboard() {
         }
     };
 
-    const getRankBadge = (rank: number) => {
+    const getRankBadge = (rank) => {
         if (rank === 1) return <span className="rank-badge rank-gold">🥇</span>;
         if (rank === 2) return <span className="rank-badge rank-silver">🥈</span>;
         if (rank === 3) return <span className="rank-badge rank-bronze">🥉</span>;

@@ -26,22 +26,22 @@ api.interceptors.response.use(
 
 // API functions
 export const authApi = {
-    login: (email: string, password: string) =>
+    login: (email, password) =>
         api.post('/auth/login', { email, password }),
-    register: (data: Record<string, unknown>) =>
+    register: (data) =>
         api.post('/auth/register', data),
     me: () =>
         api.get('/auth/me'),
 };
 
 export const leadsApi = {
-    list: (params?: Record<string, unknown>) =>
+    list: (params) =>
         api.get('/leads', { params }),
-    get: (id: string) =>
+    get: (id) =>
         api.get(`/leads/${id}`),
-    create: (data: Record<string, unknown>) =>
+    create: (data) =>
         api.post('/leads', data),
-    import: (file: File, mode: string) => {
+    import: (file, mode) => {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('mode', mode);
@@ -49,45 +49,45 @@ export const leadsApi = {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
     },
-    getOptimalTime: (id: string) =>
+    getOptimalTime: (id) =>
         api.get(`/leads/${id}/optimal-time`),
 };
 
 export const callsApi = {
-    log: (data: Record<string, unknown>) =>
+    log: (data) =>
         api.post('/calls', data),
-    ghostSync: (data: Record<string, unknown>) =>
+    ghostSync: (data) =>
         api.post('/calls/ghost-sync', data),
-    get: (id: string) =>
+    get: (id) =>
         api.get(`/calls/${id}`),
-    updateDisposition: (id: string, data: Record<string, unknown>) =>
+    updateDisposition: (id, data) =>
         api.put(`/calls/${id}/disposition`, data),
 };
 
 export const analyticsApi = {
-    team: (period?: string) =>
+    team: (period) =>
         api.get('/analytics/team', { params: { period } }),
     heatmap: () =>
         api.get('/analytics/heatmap'),
     warRoom: () =>
         api.get('/analytics/war-room'),
-    rep: (id: string) =>
+    rep: (id) =>
         api.get(`/analytics/rep/${id}`),
 };
 
 export const leaderboardApi = {
-    top: (limit?: number) =>
+    top: (limit) =>
         api.get('/leaderboard/top', { params: { limit } }),
-    rep: (id: string) =>
+    rep: (id) =>
         api.get(`/leaderboard/rep/${id}`),
-    history: (days?: number) =>
+    history: (days) =>
         api.get('/leaderboard/history', { params: { days } }),
 };
 
 export const aiApi = {
-    analyze: (callId: string, audioUrl?: string) =>
+    analyze: (callId, audioUrl) =>
         api.post('/ai/analyze', { callId, audioUrl }),
-    battlecard: (objection: string, context?: Record<string, unknown>) =>
+    battlecard: (objection, context) =>
         api.post('/ai/battlecard', { objection, context }),
     battlecards: () =>
         api.get('/ai/battlecards'),
