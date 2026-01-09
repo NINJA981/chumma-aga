@@ -2,8 +2,8 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_BASE_URL = __DEV__
-    ? 'http://10.0.2.2:3001/api' // Android emulator
-    : 'https://api.vocalpulse.io/api';
+    ? 'http://10.0.2.2:3001/api/v1' // Android emulator
+    : 'https://api.vocalpulse.io/api/v1';
 
 export const api = axios.create({
     baseURL: API_BASE_URL,
@@ -33,9 +33,9 @@ api.interceptors.response.use(
 
 // Auth
 export const authApi = {
-    login: (email: string, password: string) =>
+    login: (email, password) =>
         api.post('/auth/login', { email, password }),
-    register: (data: any) =>
+    register: (data) =>
         api.post('/auth/register', data),
     me: () =>
         api.get('/auth/me'),
@@ -43,30 +43,24 @@ export const authApi = {
 
 // Calls
 export const callsApi = {
-    log: (data: any) =>
+    log: (data) =>
         api.post('/calls', data),
-    ghostSync: (data: {
-        phoneNumber: string;
-        startedAt: string;
-        endedAt: string;
-        durationSeconds: number;
-        callType: 'outbound' | 'inbound';
-    }) =>
+    ghostSync: (data) =>
         api.post('/calls/ghost-sync', data),
 };
 
 // Leads
 export const leadsApi = {
-    list: (params?: any) =>
+    list: (params) =>
         api.get('/leads', { params }),
-    get: (id: string) =>
+    get: (id) =>
         api.get(`/leads/${id}`),
-    getOptimalTime: (id: string) =>
+    getOptimalTime: (id) =>
         api.get(`/leads/${id}/optimal-time`),
 };
 
 // AI
 export const aiApi = {
-    battlecard: (objection: string) =>
+    battlecard: (objection) =>
         api.post('/ai/battlecard', { objection }),
 };

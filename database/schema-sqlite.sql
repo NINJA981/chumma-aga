@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS leads (
     source TEXT,
     optimal_call_hour INTEGER,
     optimal_call_day INTEGER,
+    deleted_at TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
 );

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 export const api = axios.create({
-    baseURL: '/api',
+    baseURL: '/api/v1',
     headers: {
         'Content-Type': 'application/json',
     },
@@ -91,6 +91,8 @@ export const aiApi = {
         api.post('/ai/battlecard', { objection, context }),
     battlecards: () =>
         api.get('/ai/battlecards'),
+    chat: (message, context) =>
+        api.post('/ai/chat', { message, context }),
 };
 
 export const followupsApi = {

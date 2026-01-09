@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { analyticsApi } from '../services/api';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import { toast } from 'react-hot-toast';
 import {
     BarChart3,
     Clock,
@@ -11,6 +14,7 @@ import {
     Users,
     ChevronRight,
     Calendar,
+    Download,
 } from 'lucide-react';
 import {
     AreaChart,
@@ -81,6 +85,7 @@ export default function Analytics() {
     const [heatmap, setHeatmap] = useState(null);
     const [teamStats, setTeamStats] = useState(null);
     const [loading, setLoading] = useState(true);
+    const dashboardRef = useRef(null);
 
     useEffect(() => {
         loadData();
@@ -96,8 +101,37 @@ export default function Analytics() {
             setTeamStats(teamRes.data);
         } catch (error) {
             console.error('Failed to load analytics:', error);
+            // Don't show error to user, just show empty state/mock data if fails
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleExport = async () => {
+        if (!dashboardRef.current) return;
+        const toastId = toast.loading('Generating PDF report...');
+
+        try {
+            const element = dashboardRef.current;
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                backgroundColor: '#f8fafc' // slate-50 matches bg
+            });
+            const imgData = canvas.toDataURL('image/png');
+
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`VocalPulse_Analytics_${new Date().toISOString().split('T')[0]}.pdf`);
+
+            toast.success('Report downloaded successfully!', { id: toastId });
+        } catch (err) {
+            console.error('Export failed:', err);
+            toast.error('Failed to export report', { id: toastId });
         }
     };
 
@@ -195,7 +229,7 @@ export default function Analytics() {
             animate="visible"
             variants={containerVariants}
         >
-            <div className="max-w-7xl mx-auto space-y-8">
+            <div className="max-w-7xl mx-auto space-y-8" ref={dashboardRef}>
                 {/* Breadcrumb */}
                 <motion.div variants={itemVariants} className="flex items-center gap-2 text-sm">
                     <span className="text-slate-400 font-medium">Home</span>
@@ -217,13 +251,25 @@ export default function Analytics() {
                         </div>
                     </div>
 
-                    <motion.div
-                        className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-2xl border border-slate-200/80 shadow-sm cursor-pointer"
-                        whileHover={{ scale: 1.02 }}
-                    >
-                        <Calendar size={16} className="text-slate-400" />
-                        <span className="text-sm font-medium text-slate-600">Last 30 days</span>
-                    </motion.div>
+                    <div className="flex gap-3">
+                        <motion.button
+                            onClick={handleExport}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-2xl border border-slate-200/80 shadow-sm text-indigo-600 font-medium hover:bg-indigo-50 transition-colors"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                        >
+                            <Download size={16} />
+                            <span>Export Report</span>
+                        </motion.button>
+
+                        <motion.div
+                            className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-2xl border border-slate-200/80 shadow-sm cursor-pointer"
+                            whileHover={{ scale: 1.02 }}
+                        >
+                            <Calendar size={16} className="text-slate-400" />
+                            <span className="text-sm font-medium text-slate-600">Last 30 days</span>
+                        </motion.div>
+                    </div>
                 </motion.div>
 
                 {/* Quick Stats */}

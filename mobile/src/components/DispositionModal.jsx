@@ -12,12 +12,6 @@ import { callsApi } from '../services/api';
 
 const { width } = Dimensions.get('window');
 
-interface CallInfo {
-    phoneNumber: string;
-    duration: number;
-    startTime: number;
-}
-
 const DISPOSITIONS = [
     { value: 'connected', label: '✅ Connected', color: '#10b981' },
     { value: 'no_answer', label: '📵 No Answer', color: '#6b7280' },
@@ -30,15 +24,15 @@ const DISPOSITIONS = [
 
 export function DispositionModal() {
     const [visible, setVisible] = useState(false);
-    const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
+    const [callInfo, setCallInfo] = useState(null);
     const [saving, setSaving] = useState(false);
-    const [selectedDisposition, setSelectedDisposition] = useState<string | null>(null);
+    const [selectedDisposition, setSelectedDisposition] = useState(null);
 
     useEffect(() => {
         // Listen for call end events
         const subscription = DeviceEventEmitter.addListener(
             'ShowDispositionModal',
-            (info: CallInfo) => {
+            (info) => {
                 setCallInfo(info);
                 setSelectedDisposition(null);
                 setVisible(true);
@@ -48,7 +42,7 @@ export function DispositionModal() {
         return () => subscription.remove();
     }, []);
 
-    const handleDisposition = async (disposition: string) => {
+    const handleDisposition = async (disposition) => {
         if (!callInfo) return;
 
         setSelectedDisposition(disposition);
@@ -80,7 +74,7 @@ export function DispositionModal() {
         setCallInfo(null);
     };
 
-    const formatDuration = (seconds: number): string => {
+    const formatDuration = (seconds) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `${mins}m ${secs}s`;

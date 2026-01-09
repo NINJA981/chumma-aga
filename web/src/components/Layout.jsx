@@ -19,6 +19,7 @@ import {
     Calendar,
     Target,
 } from 'lucide-react';
+import SalesAssistant from './SalesAssistant';
 
 // Admin/Manager navigation
 const adminNavItems = [
@@ -217,10 +218,12 @@ export default function Layout({ children }) {
             </motion.aside>
 
             {/* Main content */}
-            <main className="flex-1 overflow-auto">
+            <main className="flex-1 overflow-auto relative">
                 <div className="p-8 lg:p-10">
                     {children}
                 </div>
+                {/* AI Assistant for Reps */}
+                {isRep && <SalesAssistant />}
             </main>
         </div>
     );

@@ -26,13 +26,75 @@ const FollowUps = () => {
     const [newFollowup, setNewFollowup] = useState({ dueDate: '', description: '' });
     const [creating, setCreating] = useState(false);
 
+    // Demo follow-ups data
+    const demoFollowups = {
+        overdue: [
+            {
+                id: '1',
+                lead_first_name: 'Amit',
+                lead_last_name: 'Kumar',
+                lead_company: 'DataDriven Co',
+                lead_phone: '+91 43210 98765',
+                description: 'Discuss enterprise pricing',
+                due_date: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+            },
+        ],
+        today: [
+            {
+                id: '2',
+                lead_first_name: 'Priya',
+                lead_last_name: 'Sharma',
+                lead_company: 'TechVentures Pvt Ltd',
+                lead_phone: '+91 98765 43210',
+                description: 'Follow up on proposal sent last week',
+                due_date: new Date(Date.now() + 1000 * 60 * 60 * 2).toISOString(),
+            },
+            {
+                id: '3',
+                lead_first_name: 'Vikram',
+                lead_last_name: 'Singh',
+                lead_company: 'StartupHub',
+                lead_phone: '+91 65432 10987',
+                description: 'Demo scheduled callback',
+                due_date: new Date(Date.now() + 1000 * 60 * 60 * 4).toISOString(),
+            },
+        ],
+        upcoming: [
+            {
+                id: '4',
+                lead_first_name: 'Neha',
+                lead_last_name: 'Gupta',
+                lead_company: 'CloudFirst Inc',
+                lead_phone: '+91 54321 09876',
+                description: 'Final contract discussion',
+                due_date: new Date(Date.now() + 1000 * 60 * 60 * 48).toISOString(),
+            },
+            {
+                id: '5',
+                lead_first_name: 'Rahul',
+                lead_last_name: 'Verma',
+                lead_company: 'Global Solutions',
+                lead_phone: '+91 87654 32109',
+                description: 'Check on implementation progress',
+                due_date: new Date(Date.now() + 1000 * 60 * 60 * 72).toISOString(),
+            },
+        ],
+    };
+
     const loadFollowups = useCallback(async () => {
         try {
             const response = await followupsApi.list({ filter: activeTab });
             setFollowups(response.data.followups);
             setCounts(response.data.counts);
         } catch (error) {
-            console.error('Failed to load followups:', error);
+            console.error('Failed to load followups, using demo data:', error);
+            // Use demo data as fallback
+            setFollowups(demoFollowups[activeTab] || []);
+            setCounts({
+                overdue: demoFollowups.overdue.length,
+                today: demoFollowups.today.length,
+                upcoming: demoFollowups.upcoming.length
+            });
         } finally {
             setLoading(false);
         }
@@ -148,8 +210,8 @@ const FollowUps = () => {
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
                         className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-medium transition-all ${activeTab === tab.id
-                                ? 'bg-white text-slate-900 shadow-sm'
-                                : 'text-slate-600 hover:text-slate-900'
+                            ? 'bg-white text-slate-900 shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900'
                             }`}
                         whileTap={{ scale: 0.98 }}
                     >
@@ -176,8 +238,8 @@ const FollowUps = () => {
                                 exit={{ opacity: 0, x: -100 }}
                                 transition={{ delay: index * 0.05 }}
                                 className={`bg-white rounded-2xl border p-5 ${activeTab === 'overdue'
-                                        ? 'border-red-200 bg-red-50/30'
-                                        : 'border-slate-200'
+                                    ? 'border-red-200 bg-red-50/30'
+                                    : 'border-slate-200'
                                     }`}
                             >
                                 <div className="flex items-start justify-between gap-4">

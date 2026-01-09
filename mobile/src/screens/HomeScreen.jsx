@@ -66,9 +66,11 @@ export function HomeScreen({ onLogout }) {
     const handleManualSync = async () => {
         setSyncing(true);
         try {
-            const count = await GhostSyncService.syncNow();
-            setSyncCount(count);
-            Alert.alert('Sync Complete', `Synced ${count} calls`);
+            const { synced, queued } = await GhostSyncService.syncNow();
+            setSyncCount(synced + queued);
+            let message = `Synced ${synced} calls`;
+            if (queued > 0) message += ` (${queued} queued offline)`;
+            Alert.alert('Sync Complete', message);
         } catch (error) {
             Alert.alert('Sync Failed', 'Could not sync calls. Please try again.');
         } finally {

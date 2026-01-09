@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Phone, Mail, Lock, ArrowRight } from 'lucide-react';
+import { Phone, Mail, Lock, ArrowRight, UserCircle, Briefcase } from 'lucide-react';
 
 export default function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const { login } = useAuth();
+    const { login, demoLogin } = useAuth();
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
@@ -21,6 +21,19 @@ export default function Login() {
             navigate('/');
         } catch (err) {
             setError(err.response?.data?.error || 'Login failed');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDemoLogin = async (role) => {
+        setError('');
+        setLoading(true);
+        try {
+            await demoLogin(role);
+            navigate('/');
+        } catch (err) {
+            setError('Demo login failed');
         } finally {
             setLoading(false);
         }
@@ -41,6 +54,38 @@ export default function Login() {
                 {/* Login Card */}
                 <div className="glass-card p-8">
                     <h2 className="text-xl font-semibold text-white mb-6">Welcome back</h2>
+
+                    {/* Quick Demo Buttons */}
+                    <div className="mb-6 space-y-3">
+                        <p className="text-sm text-slate-400 text-center mb-3">Quick Demo Login</p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                onClick={() => handleDemoLogin('admin')}
+                                disabled={loading}
+                                className="flex items-center justify-center gap-2 py-3 bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/30 text-indigo-300 rounded-lg transition-all disabled:opacity-50"
+                            >
+                                <Briefcase className="w-4 h-4" />
+                                <span className="text-sm font-medium">Manager</span>
+                            </button>
+                            <button
+                                onClick={() => handleDemoLogin('rep')}
+                                disabled={loading}
+                                className="flex items-center justify-center gap-2 py-3 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-300 rounded-lg transition-all disabled:opacity-50"
+                            >
+                                <UserCircle className="w-4 h-4" />
+                                <span className="text-sm font-medium">Sales Rep</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="relative mb-6">
+                        <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-slate-700"></div>
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                            <span className="px-2 bg-slate-800/80 text-slate-500">or login with credentials</span>
+                        </div>
+                    </div>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {error && (
@@ -101,9 +146,10 @@ export default function Login() {
                 </div>
 
                 <p className="text-center text-slate-500 mt-6 text-sm">
-                    Demo: admin@demo.com / password
+                    Click "Manager" or "Sales Rep" above for demo access
                 </p>
             </div>
         </div>
     );
 }
+

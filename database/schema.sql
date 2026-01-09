@@ -71,6 +71,7 @@ CREATE TABLE leads (
     
     -- Timestamps
     last_contacted_at TIMESTAMP,
+    deleted_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );

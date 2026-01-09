@@ -11,7 +11,7 @@ import { UnauthorizedError, ConflictError, ValidationError, NotFoundError } from
 import type { AuthUser, UserRole } from '../types/index.js';
 import type { RegisterDto, LoginDto, AuthResponse } from '../types/dto.js';
 
-// Demo user for development/demo mode
+// Demo user with hardcoded ID to match frontend's expectation if needed
 const DEMO_USER: AuthUser = {
     id: 'demo-user-id',
     orgId: 'demo-org-id',
@@ -21,7 +21,7 @@ const DEMO_USER: AuthUser = {
     role: 'admin',
 };
 
-const DEMO_MODE = process.env.DEMO_MODE === 'true' || process.env.NODE_ENV === 'development';
+const DEMO_MODE = process.env.DEMO_MODE === 'true';
 
 export class AuthService {
     /**
@@ -29,20 +29,20 @@ export class AuthService {
      */
     async register(data: RegisterDto): Promise<AuthResponse> {
         // Check if email exists
-        if (userRepository.emailExists(data.email)) {
+        if (await userRepository.emailExists(data.email)) {
             throw new ConflictError('Email already registered');
         }
 
         // Create or validate organization
         let orgId: string;
         if (data.orgId) {
-            const org = organizationRepository.findById(data.orgId);
+            const org = await organizationRepository.findById(data.orgId);
             if (!org) {
                 throw new ValidationError('Invalid organization ID');
             }
             orgId = data.orgId;
         } else if (data.orgName) {
-            orgId = organizationRepository.createOrg({ name: data.orgName });
+            orgId = await organizationRepository.createOrg({ name: data.orgName });
         } else {
             throw new ValidationError('Organization name or ID required');
         }
@@ -51,12 +51,12 @@ export class AuthService {
         const passwordHash = await bcrypt.hash(data.password, 12);
 
         // Create user
-        const userId = userRepository.createUser({
-            org_id: orgId,
+        const userId = await userRepository.createUser({
+            orgId,
             email: data.email,
-            password_hash: passwordHash,
-            first_name: data.firstName,
-            last_name: data.lastName,
+            passwordHash,
+            firstName: data.firstName,
+            lastName: data.lastName,
             role: 'rep',
         });
 
@@ -85,31 +85,24 @@ export class AuthService {
             const token = this.generateToken(DEMO_USER.id);
             return {
                 token,
-                user: {
-                    id: DEMO_USER.id,
-                    email: DEMO_USER.email,
-                    firstName: DEMO_USER.firstName,
-                    lastName: DEMO_USER.lastName,
-                    role: DEMO_USER.role,
-                    orgId: DEMO_USER.orgId,
-                },
+                user: DEMO_USER,
             };
         }
 
         // Find user by email
-        const user = userRepository.findByEmail(data.email);
+        const user = await userRepository.findByEmail(data.email);
         if (!user) {
             throw new UnauthorizedError('Invalid credentials');
         }
 
         // Verify password
-        const validPassword = await bcrypt.compare(data.password, user.password_hash);
+        const validPassword = await bcrypt.compare(data.password, user.passwordHash);
         if (!validPassword) {
             throw new UnauthorizedError('Invalid credentials');
         }
 
         // Update last login
-        userRepository.updateLastLogin(user.id);
+        await userRepository.updateLastLogin(user.id);
 
         // Generate JWT
         const token = this.generateToken(user.id);
@@ -119,10 +112,10 @@ export class AuthService {
             user: {
                 id: user.id,
                 email: user.email,
-                firstName: user.first_name,
-                lastName: user.last_name,
+                firstName: user.firstName,
+                lastName: user.lastName,
                 role: user.role,
-                orgId: user.org_id,
+                orgId: user.orgId,
             },
         };
     }
@@ -130,7 +123,7 @@ export class AuthService {
     /**
      * Validate JWT token and return user
      */
-    validateToken(token: string): AuthUser {
+    async validateToken(token: string): Promise<AuthUser> {
         try {
             const decoded = jwt.verify(token, config.jwt.secret) as { userId: string };
 
@@ -140,17 +133,18 @@ export class AuthService {
             }
 
             // Find real user
-            const user = userRepository.findById(decoded.userId);
+            // NOTE: Repository returns Document, we need to convert to AuthUser interface
+            const user = await userRepository.findById(decoded.userId);
             if (!user) {
                 throw new UnauthorizedError('User not found');
             }
 
             return {
                 id: user.id,
-                orgId: user.org_id,
+                orgId: user.orgId,
                 email: user.email,
-                firstName: user.first_name,
-                lastName: user.last_name,
+                firstName: user.firstName,
+                lastName: user.lastName,
                 role: user.role,
             };
         } catch (error) {
@@ -167,23 +161,23 @@ export class AuthService {
     /**
      * Get current user by ID
      */
-    getCurrentUser(userId: string): AuthUser {
+    async getCurrentUser(userId: string): Promise<AuthUser> {
         // Check for demo user
         if (userId === DEMO_USER.id) {
             return DEMO_USER;
         }
 
-        const user = userRepository.findById(userId);
+        const user = await userRepository.findById(userId);
         if (!user) {
             throw new NotFoundError('User');
         }
 
         return {
             id: user.id,
-            orgId: user.org_id,
+            orgId: user.orgId,
             email: user.email,
-            firstName: user.first_name,
-            lastName: user.last_name,
+            firstName: user.firstName,
+            lastName: user.lastName,
             role: user.role,
         };
     }

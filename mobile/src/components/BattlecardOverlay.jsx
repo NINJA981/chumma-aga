@@ -11,18 +11,12 @@ import { aiApi } from '../services/api';
 
 const { width } = Dimensions.get('window');
 
-interface BattlecardOverlayProps {
-    visible: boolean;
-    objection: string;
-    onDismiss: () => void;
-}
-
 export function BattlecardOverlay({
     visible,
     objection,
     onDismiss,
-}: BattlecardOverlayProps) {
-    const [rebuttal, setRebuttal] = useState<string>('');
+}) {
+    const [rebuttal, setRebuttal] = useState('');
     const [loading, setLoading] = useState(false);
     const slideAnim = useState(new Animated.Value(width))[0];
 

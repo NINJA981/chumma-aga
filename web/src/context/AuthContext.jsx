@@ -3,6 +3,26 @@ import { authApi } from '../services/api';
 
 const AuthContext = createContext(undefined);
 
+// Demo users for offline/demo access
+const DEMO_USERS = {
+    admin: {
+        id: 'demo-admin-1',
+        orgId: 'demo-org-1',
+        firstName: 'Alex',
+        lastName: 'Manager',
+        email: 'admin@demo.com',
+        role: 'admin',
+    },
+    rep: {
+        id: 'demo-rep-1',
+        orgId: 'demo-org-1',
+        firstName: 'Sam',
+        lastName: 'Sales',
+        email: 'rep@demo.com',
+        role: 'rep',
+    },
+};
+
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [token, setToken] = useState(localStorage.getItem('token'));
@@ -14,6 +34,19 @@ export function AuthProvider({ children }) {
 
     const checkAuth = async () => {
         const storedToken = localStorage.getItem('token');
+        const storedUser = localStorage.getItem('demoUser');
+
+        // Check for demo user first
+        if (storedUser) {
+            try {
+                setUser(JSON.parse(storedUser));
+                setLoading(false);
+                return;
+            } catch (e) {
+                localStorage.removeItem('demoUser');
+            }
+        }
+
         if (storedToken) {
             try {
                 // Verify token and get user details
@@ -27,13 +60,8 @@ export function AuthProvider({ children }) {
             }
         }
 
-        // Auto-login with demo credentials
-        try {
-            await login('admin@demo.com', 'password');
-        } catch (error) {
-            console.error('Auto-login failed:', error);
-            setLoading(false);
-        }
+        // No auto-login - let user choose demo or credentials
+        setLoading(false);
     };
 
     const login = async (email, password) => {
@@ -43,6 +71,7 @@ export function AuthProvider({ children }) {
             const { token, user } = response.data;
 
             localStorage.setItem('token', token);
+            localStorage.removeItem('demoUser');
             setToken(token);
             setUser(user);
         } finally {
@@ -50,8 +79,23 @@ export function AuthProvider({ children }) {
         }
     };
 
+    // Demo login - works without backend
+    const demoLogin = async (role = 'admin') => {
+        setLoading(true);
+        try {
+            const demoUser = DEMO_USERS[role] || DEMO_USERS.admin;
+            localStorage.setItem('demoUser', JSON.stringify(demoUser));
+            localStorage.setItem('token', 'demo-token');
+            setToken('demo-token');
+            setUser(demoUser);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const logout = () => {
         localStorage.removeItem('token');
+        localStorage.removeItem('demoUser');
         setToken(null);
         setUser(null);
     };
@@ -64,6 +108,7 @@ export function AuthProvider({ children }) {
                 isAuthenticated: !!user,
                 loading,
                 login,
+                demoLogin,
                 logout,
             }}
         >
@@ -79,3 +124,4 @@ export function useAuth() {
     }
     return context;
 }
+

@@ -1,57 +1,114 @@
-/**
- * Simple In-Memory Leaderboard (replaces Redis)
- * For production, consider using Redis or a proper cache
- */
 
-// Store: Map<orgId, Map<repId, xp>>
-const leaderboards = new Map<string, Map<string, number>>();
+import Redis from 'ioredis';
+import { config } from './env.js';
 
 /**
- * Get or create org leaderboard
+ * Redis Configuration
+ * Uses ioredis for Redis functionality with in-memory fallback
  */
-function getOrgLeaderboard(orgId: string): Map<string, number> {
-    if (!leaderboards.has(orgId)) {
-        leaderboards.set(orgId, new Map());
-    }
-    return leaderboards.get(orgId)!;
+
+let redis: Redis | null = null;
+// Check for REDIS_URL in env (not in config object explicitly, so check process.env or add to schema)
+// env.ts schema didn't have REDIS_URL. I should probably add it or just check process.env here.
+const REDIS_URL = process.env.REDIS_URL;
+
+if (REDIS_URL) {
+    console.log('🔌 Connecting to Redis...');
+    redis = new Redis(REDIS_URL, {
+        maxRetriesPerRequest: 3,
+        retryStrategy: (times) => {
+            if (times > 3) {
+                console.warn('⚠️ Redis connection failed, falling back to in-memory');
+                return null; // Stop retrying
+            }
+            return Math.min(times * 50, 2000);
+        }
+    });
+
+    redis.on('error', (err) => {
+        // Only log if we haven't switched to fallback mode conceptually (though redis instance exists)
+        console.warn('Redis Error:', err.message);
+    });
+
+    redis.on('connect', () => {
+        console.log('✅ Redis connected');
+    });
+} else {
+    console.log('⚠️ REDIS_URL not set, using in-memory storage');
 }
 
-/**
- * Update a rep's XP score
- */
+// In-Memory Fallback Storage
+const localLeaderboards = new Map<string, Map<string, number>>();
+const localCache = new Map<string, { value: any; expires: number }>();
+
+function getLocalLb(orgId: string) {
+    if (!localLeaderboards.has(orgId)) {
+        localLeaderboards.set(orgId, new Map());
+    }
+    return localLeaderboards.get(orgId)!;
+}
+
+// ==========================================
+// LEADERBOARD FUNCTIONS
+// ==========================================
+
 export async function updateLeaderboardScore(
     orgId: string,
     repId: string,
     xpDelta: number
 ): Promise<number> {
-    const lb = getOrgLeaderboard(orgId);
+    if (redis && redis.status === 'ready') {
+        const key = `leaderboard:${orgId}`;
+        const newScore = await redis.zincrby(key, xpDelta, repId);
+        return parseFloat(newScore);
+    }
+
+    // Fallback
+    const lb = getLocalLb(orgId);
     const currentXp = lb.get(repId) || 0;
     const newXp = currentXp + xpDelta;
     lb.set(repId, newXp);
     return newXp;
 }
 
-/**
- * Set absolute score
- */
 export async function setLeaderboardScore(
     orgId: string,
     repId: string,
     xp: number
 ): Promise<void> {
-    const lb = getOrgLeaderboard(orgId);
+    if (redis && redis.status === 'ready') {
+        const key = `leaderboard:${orgId}`;
+        await redis.zadd(key, xp, repId);
+        return;
+    }
+
+    // Fallback
+    const lb = getLocalLb(orgId);
     lb.set(repId, xp);
 }
 
-/**
- * Get top N rankings for an org
- */
 export async function getTopRankings(
     orgId: string,
     count: number = 10
 ): Promise<{ repId: string; xp: number; rank: number }[]> {
-    const lb = getOrgLeaderboard(orgId);
+    if (redis && redis.status === 'ready') {
+        const key = `leaderboard:${orgId}`;
+        // Get top N with scores
+        const results = await redis.zrevrange(key, 0, count - 1, 'WITHSCORES');
 
+        const rankings: { repId: string; xp: number; rank: number }[] = [];
+        for (let i = 0; i < results.length; i += 2) {
+            rankings.push({
+                repId: results[i],
+                xp: parseFloat(results[i + 1]),
+                rank: (i / 2) + 1
+            });
+        }
+        return rankings;
+    }
+
+    // Fallback
+    const lb = getLocalLb(orgId);
     const sorted = Array.from(lb.entries())
         .sort((a, b) => b[1] - a[1])
         .slice(0, count);
@@ -63,67 +120,102 @@ export async function getTopRankings(
     }));
 }
 
-/**
- * Get a rep's current rank
- */
 export async function getRepRank(orgId: string, repId: string): Promise<number | null> {
+    if (redis && redis.status === 'ready') {
+        const key = `leaderboard:${orgId}`;
+        const rank = await redis.zrevrank(key, repId);
+        return rank === null ? null : rank + 1; // Redis is 0-indexed
+    }
+
+    // Fallback
     const rankings = await getTopRankings(orgId, 1000);
     const found = rankings.find((r) => r.repId === repId);
     return found ? found.rank : null;
 }
 
-/**
- * Get a rep's current XP
- */
 export async function getRepScore(orgId: string, repId: string): Promise<number | null> {
-    const lb = getOrgLeaderboard(orgId);
+    if (redis && redis.status === 'ready') {
+        const key = `leaderboard:${orgId}`;
+        const score = await redis.zscore(key, repId);
+        return score ? parseFloat(score) : null;
+    }
+
+    // Fallback
+    const lb = getLocalLb(orgId);
     return lb.get(repId) || null;
 }
 
-/**
- * Remove a rep from leaderboard
- */
 export async function removeFromLeaderboard(orgId: string, repId: string): Promise<void> {
-    const lb = getOrgLeaderboard(orgId);
+    if (redis && redis.status === 'ready') {
+        const key = `leaderboard:${orgId}`;
+        await redis.zrem(key, repId);
+        return;
+    }
+
+    // Fallback
+    const lb = getLocalLb(orgId);
     lb.delete(repId);
 }
 
-/**
- * Cache helpers (simple in-memory)
- */
-const cache = new Map<string, { value: any; expires: number }>();
+// ==========================================
+// CACHE FUNCTIONS
+// ==========================================
 
 export async function cacheSet(key: string, value: any, expirySeconds: number = 300): Promise<void> {
-    cache.set(key, {
+    if (redis && redis.status === 'ready') {
+        await redis.setex(key, expirySeconds, JSON.stringify(value));
+        return;
+    }
+
+    // Fallback
+    localCache.set(key, {
         value,
         expires: Date.now() + expirySeconds * 1000,
     });
 }
 
 export async function cacheGet<T = any>(key: string): Promise<T | null> {
-    const item = cache.get(key);
+    if (redis && redis.status === 'ready') {
+        const data = await redis.get(key);
+        if (!data) return null;
+        try {
+            return JSON.parse(data) as T;
+        } catch {
+            return null;
+        }
+    }
+
+    // Fallback
+    const item = localCache.get(key);
     if (!item) return null;
     if (Date.now() > item.expires) {
-        cache.delete(key);
+        localCache.delete(key);
         return null;
     }
     return item.value as T;
 }
 
 export async function cacheDelete(key: string): Promise<void> {
-    cache.delete(key);
+    if (redis && redis.status === 'ready') {
+        await redis.del(key);
+        return;
+    }
+
+    // Fallback
+    localCache.delete(key);
 }
 
-/**
- * Health check (always true for in-memory)
- */
 export async function checkRedisConnection(): Promise<boolean> {
-    return true;
+    if (redis) {
+        return redis.status === 'ready';
+    }
+    return true; // Fallback is always ready
 }
 
-/**
- * Cleanup (no-op for in-memory)
- */
 export async function closeRedisConnection(): Promise<void> {
-    console.log('In-memory cache cleared');
+    if (redis) {
+        await redis.quit();
+    }
+    localLeaderboards.clear();
+    localCache.clear();
 }

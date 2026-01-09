@@ -3,9 +3,11 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { createServer } from 'http';
 import { config } from './config/env.js';
-import { closeDatabase } from './config/database.js';
+import { connectDB, closeDatabase } from './config/database.js'; // Updated import
 import { initializeSocket, closeSocket } from './config/socket.js';
 import { requestLogger, errorHandler, notFoundHandler } from './middleware/common.js';
+// Remove SQLite sync service as Redis/Memory is used or should be updated to Mongo later
+// import { leaderboardService } from './services/leaderboard.service.js';
 
 // Routes
 import authRouter from './routes/auth.js';
@@ -23,51 +25,59 @@ const httpServer = createServer(app);
 // Initialize Socket.io
 initializeSocket(httpServer);
 
+// Connect to MongoDB
+connectDB();
+
 import rateLimit from 'express-rate-limit';
 
 // Global rate limiter
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    limit: 100, // Limit each IP to 100 requests per 15 minutes
+    limit: 500, // Increased for demo/manager usage
     standardHeaders: 'draft-7',
     legacyHeaders: false,
 });
+
+import cookieParser from 'cookie-parser';
 
 // Middleware
 app.use(helmet());
 app.use(cors({ origin: config.cors.origin, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
+app.use(cookieParser());
 app.use(limiter);
 app.use(requestLogger);
 
 // Health check
 app.get('/api/health', (req, res) => {
+    // Check connection state: 1 = connected
+    const status = import('./config/database.js').then(m => m.mongoose.connection.readyState === 1 ? 'connected' : 'disconnected');
+
     res.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
-        database: 'sqlite',
+        database: 'mongodb',
     });
 });
 
 // Root endpoint for convenience
 app.get('/', (req, res) => {
     res.json({
-        message: 'VocalPulse Backend API is running',
+        message: 'VocalPulse Backend API is running (MERN Stack)',
         docs: '/docs', // Placeholder if we get docs later
         health: '/api/health'
     });
 });
 
 // API Routes
-app.use('/api/auth', authRouter);
-app.use('/api/leads', leadsRouter);
-app.use('/api/calls', callsRouter);
-app.use('/api/analytics', analyticsRouter);
-app.use('/api/leaderboard', leaderboardRouter);
-app.use('/api/leaderboard', leaderboardRouter);
-app.use('/api/ai', aiRouter);
-app.use('/api/webhooks', webhookRouter);
-app.use('/api/followups', followupsRouter);
+app.use('/api/v1/auth', authRouter);
+app.use('/api/v1/leads', leadsRouter);
+app.use('/api/v1/calls', callsRouter);
+app.use('/api/v1/analytics', analyticsRouter);
+app.use('/api/v1/leaderboard', leaderboardRouter);
+app.use('/api/v1/ai', aiRouter);
+app.use('/api/v1/webhooks', webhookRouter);
+app.use('/api/v1/followups', followupsRouter);
 
 // Error handling
 app.use(notFoundHandler);
@@ -81,7 +91,7 @@ httpServer.listen(config.port, () => {
 ╠══════════════════════════════════════════════════════╣
 ║  🚀 Server:    http://localhost:${config.port}                 ║
 ║  📊 Health:    http://localhost:${config.port}/api/health      ║
-║  💾 Database:  SQLite (file-based)                    ║
+║  💾 Database:  MongoDB                                ║
 ║  🔌 Socket.io: Ready                                  ║
 ╚══════════════════════════════════════════════════════╝
   `);
@@ -91,7 +101,7 @@ httpServer.listen(config.port, () => {
 const shutdown = async () => {
     console.log('\nShutting down...');
     closeSocket();
-    closeDatabase();
+    await closeDatabase(); // Await mongo close
     process.exit(0);
 };
 

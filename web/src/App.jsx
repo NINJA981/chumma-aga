@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import Layout from './components/Layout';
@@ -52,6 +53,7 @@ function App() {
         <BrowserRouter>
             <AuthProvider>
                 <SocketProvider>
+                    <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
                     <Routes>
                         <Route path="/login" element={<Login />} />
                         <Route

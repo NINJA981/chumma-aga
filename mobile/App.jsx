@@ -14,7 +14,7 @@ import { DispositionModal } from './components/DispositionModal';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-function MainTabs({ onLogout }: { onLogout: () => void }) {
+function MainTabs({ onLogout }) {
     return (
         <Tab.Navigator
             screenOptions={{
@@ -59,7 +59,7 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
 }
 
 export default function App() {
-    const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+    const [isAuthenticated, setIsAuthenticated] = useState(null);
 
     useEffect(() => {
         checkAuth();

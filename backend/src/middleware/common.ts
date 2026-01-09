@@ -9,8 +9,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
     res.setHeader('X-Request-ID', requestId);
 
     // Log request
-    console.log(`→ ${req.method} ${req.path}`, {
-        requestId,
+    console.log(`[${requestId}] → ${req.method} ${req.path}`, {
         query: Object.keys(req.query).length > 0 ? req.query : undefined,
         ip: req.ip,
     });
@@ -19,7 +18,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
     res.on('finish', () => {
         const duration = Date.now() - start;
         const statusEmoji = res.statusCode < 400 ? '✓' : '✗';
-        console.log(`${statusEmoji} ${req.method} ${req.path} ${res.statusCode} (${duration}ms)`);
+        console.log(`[${requestId}] ${statusEmoji} ${req.method} ${req.path} ${res.statusCode} (${duration}ms)`);
     });
 
     next();
@@ -31,13 +30,15 @@ export function errorHandler(
     res: Response,
     next: NextFunction
 ): void {
-    console.error('Error:', err.message, err.stack);
+    const requestId = res.getHeader('X-Request-ID');
+    console.error(`[${requestId}] Error:`, err.message, err.stack);
 
     // Don't expose internal errors in production
     const isProduction = process.env.NODE_ENV === 'production';
 
     res.status(500).json({
         error: isProduction ? 'Internal server error' : err.message,
+        requestId,
         ...(isProduction ? {} : { stack: err.stack }),
     });
 }

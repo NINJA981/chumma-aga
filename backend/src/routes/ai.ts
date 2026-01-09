@@ -4,18 +4,20 @@ import { authenticate } from '../middleware/auth.js';
 import { transcribeAudio } from '../services/ai/transcription.js';
 import { analyzeConversation } from '../services/ai/analysis.js';
 import { generateBattlecard } from '../services/ai/battlecard.js';
+import { chatWithAI } from '../services/ai/chat.js';
+import { updateLeaderboardWithAIQuality } from '../middleware/leaderboard.js';
 
 const router = Router();
 router.use(authenticate);
 
-// POST /api/ai/analyze - Analyze a call recording
+// POST /api/ai/analyze - Analyze a call recording with quality scoring
 router.post('/analyze', async (req: Request, res: Response) => {
     try {
         const { callId, audioUrl, transcript: existingTranscript } = req.body;
 
         // Verify call exists and belongs to org
-        const call = queryOne(
-            pgToSqlite('SELECT id, recording_url, transcript FROM calls WHERE id = $1 AND org_id = $2'),
+        const call = queryOne<{ id: string; recording_url: string; transcript: string; rep_id: string }>(
+            pgToSqlite('SELECT id, recording_url, transcript, rep_id FROM calls WHERE id = $1 AND org_id = $2'),
             [callId, req.user!.orgId]
         );
 
@@ -38,11 +40,10 @@ router.post('/analyze', async (req: Request, res: Response) => {
             return;
         }
 
-        // Analyze conversation (Conversation DNA)
+        // Analyze conversation (Conversation DNA) - Now includes quality scoring!
         const analysis = await analyzeConversation(transcript);
 
         // Save analysis
-        // SQLite supports ON CONFLICT logic
         const analysisId = generateId();
         query(
             pgToSqlite(`INSERT INTO call_analysis (id, call_id, sentiment_score, sentiment_label, sentiment_reasoning, summary_bullets, full_summary, action_items, keywords, topics, model_version)
@@ -67,7 +68,7 @@ router.post('/analyze', async (req: Request, res: Response) => {
                 JSON.stringify(analysis.actionItems),
                 analysis.keywords,
                 analysis.topics,
-                'gpt-4o-mini',
+                'gemini-1.5-flash',
             ]
         );
 
@@ -83,6 +84,29 @@ router.post('/analyze', async (req: Request, res: Response) => {
             }
         }
 
+        // Get rep name for leaderboard update
+        const rep = queryOne<{ first_name: string; last_name: string }>(
+            'SELECT first_name, last_name FROM users WHERE id = ?',
+            [call.rep_id]
+        );
+        const repName = rep ? `${rep.first_name} ${rep.last_name}` : 'Rep';
+
+        // UPDATE LEADERBOARD with AI Quality XP! 🎯
+        const xpResult = await updateLeaderboardWithAIQuality(
+            req.user!.orgId,
+            call.rep_id,
+            repName,
+            callId,
+            {
+                sentimentScore: analysis.sentimentScore,
+                actionItemsCount: analysis.actionItems.length,
+                positiveOutcome: analysis.qualityIndicators.positiveOutcome,
+                objectionHandled: analysis.qualityIndicators.objectionHandled,
+                professionalGreeting: analysis.qualityIndicators.professionalGreeting,
+                clearNextSteps: analysis.qualityIndicators.clearNextSteps,
+            }
+        );
+
         res.json({
             callId,
             analysis: {
@@ -90,7 +114,17 @@ router.post('/analyze', async (req: Request, res: Response) => {
                 sentimentLabel: analysis.sentimentLabel,
                 summaryBullets: analysis.summaryBullets,
                 actionItems: analysis.actionItems,
+                qualityIndicators: analysis.qualityIndicators,
             },
+            // NEW: Quality score and XP awarded for leaderboard
+            qualityScore: {
+                totalPoints: analysis.qualityScore.totalPoints,
+                maxPossible: analysis.qualityScore.maxPossible,
+                percentageScore: analysis.qualityScore.percentageScore,
+                breakdown: analysis.qualityScore.breakdown,
+            },
+            xpAwarded: xpResult.xpAwarded,
+            xpBreakdown: xpResult.breakdown,
         });
     } catch (error) {
         console.error('AI analyze error:', error);
@@ -173,6 +207,26 @@ router.get('/battlecards', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('List battlecards error:', error);
         res.status(500).json({ error: 'Failed to fetch battlecards' });
+    }
+});
+
+
+// POST /api/ai/chat - Chat with AI Assistant
+router.post('/chat', async (req: Request, res: Response) => {
+    try {
+        const { message, context } = req.body;
+
+        if (!message) {
+            res.status(400).json({ error: 'Message is required' });
+            return;
+        }
+
+        const reply = await chatWithAI(message, context);
+
+        res.json({ reply });
+    } catch (error) {
+        console.error('Chat error:', error);
+        res.status(500).json({ error: 'Failed to chat with AI' });
     }
 });
 

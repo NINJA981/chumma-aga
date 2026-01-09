@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { query, pgToSqlite } from '../config/database.js';
+import { query, queryOne, pgToSqlite } from '../config/database.js';
 import { analyticsService } from '../services/analytics.service.js';
+import { getRepRank, getRepScore } from '../config/redis.js';
 import { authenticate, requireManager } from '../middleware/auth.js';
 
 const router = Router();
@@ -22,53 +23,55 @@ router.get('/team', requireManager, async (req: Request, res: Response) => {
         const { period = '30d' } = req.query;
         const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
 
-        // Overall stats
-        const stats = query<{
-            total_calls: string;
-            answered_calls: string;
-            total_talk_seconds: string;
-            conversions: string;
-        }>(
-            pgToSqlite(`SELECT 
-        COUNT(*) as total_calls,
-        COUNT(*) FILTER (WHERE is_answered) as answered_calls,
-        COALESCE(SUM(duration_seconds), 0) as total_talk_seconds,
-        COUNT(*) FILTER (WHERE disposition = 'converted') as conversions
-       FROM calls
-       WHERE org_id = $1 AND started_at > NOW() - INTERVAL '${days} days'`),
-            [req.user!.orgId]
-        );
+        const [stats, repStats, dailyTrend] = await Promise.all([
+            // Overall stats
+            Promise.resolve(query<{
+                total_calls: string;
+                answered_calls: string;
+                total_talk_seconds: string;
+                conversions: string;
+            }>(
+                pgToSqlite(`SELECT 
+            COUNT(*) as total_calls,
+            COUNT(*) FILTER (WHERE is_answered) as answered_calls,
+            COALESCE(SUM(duration_seconds), 0) as total_talk_seconds,
+            COUNT(*) FILTER (WHERE disposition = 'converted') as conversions
+           FROM calls
+           WHERE org_id = $1 AND started_at > NOW() - INTERVAL '${days} days'`),
+                [req.user!.orgId]
+            )),
 
-        // Rep breakdown
-        const repStats = query(
-            pgToSqlite(`SELECT 
-        u.id, u.first_name, u.last_name,
-        COUNT(c.id) as total_calls,
-        COUNT(c.id) FILTER (WHERE c.is_answered) as answered_calls,
-        COALESCE(SUM(c.duration_seconds), 0) as total_talk_seconds,
-        COALESCE(AVG(c.duration_seconds) FILTER (WHERE c.is_answered), 0) as avg_call_duration,
-        COUNT(c.id) FILTER (WHERE c.disposition = 'converted') as conversions
-       FROM users u
-       LEFT JOIN calls c ON c.rep_id = u.id AND c.started_at > NOW() - INTERVAL '${days} days'
-       WHERE u.org_id = $1 AND u.role = 'rep'
-       GROUP BY u.id
-       ORDER BY total_calls DESC`),
-            [req.user!.orgId]
-        );
+            // Rep breakdown
+            Promise.resolve(query(
+                pgToSqlite(`SELECT 
+            u.id, u.first_name, u.last_name,
+            COUNT(c.id) as total_calls,
+            COUNT(c.id) FILTER (WHERE c.is_answered) as answered_calls,
+            COALESCE(SUM(c.duration_seconds), 0) as total_talk_seconds,
+            COALESCE(AVG(c.duration_seconds) FILTER (WHERE c.is_answered), 0) as avg_call_duration,
+            COUNT(c.id) FILTER (WHERE c.disposition = 'converted') as conversions
+           FROM users u
+           LEFT JOIN calls c ON c.rep_id = u.id AND c.started_at > NOW() - INTERVAL '${days} days'
+           WHERE u.org_id = $1 AND u.role = 'rep'
+           GROUP BY u.id
+           ORDER BY total_calls DESC`),
+                [req.user!.orgId]
+            )),
 
-        // Daily trend
-        const dailyTrend = query(
-            pgToSqlite(`SELECT 
-        DATE(started_at) as date,
-        COUNT(*) as calls,
-        COUNT(*) FILTER (WHERE is_answered) as answered,
-        COALESCE(SUM(duration_seconds), 0) as talk_seconds
-       FROM calls
-       WHERE org_id = $1 AND started_at > NOW() - INTERVAL '${days} days'
-       GROUP BY DATE(started_at)
-       ORDER BY date`),
-            [req.user!.orgId]
-        );
+            // Daily trend
+            Promise.resolve(query(
+                pgToSqlite(`SELECT 
+            DATE(started_at) as date,
+            COUNT(*) as calls,
+            COUNT(*) FILTER (WHERE is_answered) as answered,
+            COALESCE(SUM(duration_seconds), 0) as talk_seconds
+           FROM calls
+           WHERE org_id = $1 AND started_at > NOW() - INTERVAL '${days} days'
+           GROUP BY DATE(started_at)
+           ORDER BY date`),
+                [req.user!.orgId]
+            ))
+        ]);
 
         res.json({
             overview: {
@@ -138,39 +141,41 @@ router.get('/heatmap', requireManager, async (req: Request, res: Response) => {
 // GET /api/analytics/war-room - Real-time war room data
 router.get('/war-room', requireManager, async (req: Request, res: Response) => {
     try {
-        // Today's stats
-        const todayStats = query<{ total_calls: string; conversions: string }>(
-            pgToSqlite(`SELECT 
-        COUNT(*) as total_calls,
-        COUNT(*) FILTER (WHERE disposition = 'converted') as conversions
-       FROM calls
-       WHERE org_id = $1 AND DATE(started_at) = CURRENT_DATE`),
-            [req.user!.orgId]
-        );
+        const [todayStats, recentActivity, activeReps] = await Promise.all([
+            // Today's stats
+            Promise.resolve(query<{ total_calls: string; conversions: string }>(
+                pgToSqlite(`SELECT 
+            COUNT(*) as total_calls,
+            COUNT(*) FILTER (WHERE disposition = 'converted') as conversions
+           FROM calls
+           WHERE org_id = $1 AND DATE(started_at) = CURRENT_DATE`),
+                [req.user!.orgId]
+            )),
 
-        // Recent activity (last 20 calls)
-        const recentActivity = query(
-            pgToSqlite(`SELECT 
-        c.id, c.started_at, c.duration_seconds, c.is_answered, c.disposition,
-        u.first_name as rep_first_name, u.last_name as rep_last_name,
-        l.first_name as lead_first_name, l.last_name as lead_last_name
-       FROM calls c
-       JOIN users u ON c.rep_id = u.id
-       LEFT JOIN leads l ON c.lead_id = l.id
-       WHERE c.org_id = $1
-       ORDER BY c.started_at DESC
-       LIMIT 20`),
-            [req.user!.orgId]
-        );
+            // Recent activity (last 20 calls)
+            Promise.resolve(query(
+                pgToSqlite(`SELECT 
+            c.id, c.started_at, c.duration_seconds, c.is_answered, c.disposition,
+            u.first_name as rep_first_name, u.last_name as rep_last_name,
+            l.first_name as lead_first_name, l.last_name as lead_last_name
+           FROM calls c
+           JOIN users u ON c.rep_id = u.id
+           LEFT JOIN leads l ON c.lead_id = l.id
+           WHERE c.org_id = $1
+           ORDER BY c.started_at DESC
+           LIMIT 20`),
+                [req.user!.orgId]
+            )),
 
-        // Active reps (calls in last 30 min)
-        const activeReps = query(
-            pgToSqlite(`SELECT DISTINCT u.id, u.first_name, u.last_name
-       FROM calls c
-       JOIN users u ON c.rep_id = u.id
-       WHERE c.org_id = $1 AND c.started_at > NOW() - INTERVAL '30 minutes'`),
-            [req.user!.orgId]
-        );
+            // Active reps (calls in last 30 min)
+            Promise.resolve(query(
+                pgToSqlite(`SELECT DISTINCT u.id, u.first_name, u.last_name
+           FROM calls c
+           JOIN users u ON c.rep_id = u.id
+           WHERE c.org_id = $1 AND c.started_at > NOW() - INTERVAL '30 minutes'`),
+                [req.user!.orgId]
+            ))
+        ]);
 
         res.json({
             todayCalls: parseInt(todayStats[0]?.total_calls || '0', 10),
@@ -256,77 +261,73 @@ router.get('/my-stats', async (req: Request, res: Response) => {
         const orgId = req.user!.orgId;
         const today = new Date().toISOString().split('T')[0];
 
-        // Today's call stats
-        const todayStats = query<{
-            total_calls: string;
-            answered_calls: string;
-            total_talk_seconds: string;
-            conversions: string;
-        }>(
-            pgToSqlite(`SELECT 
-                COUNT(*) as total_calls,
-                SUM(CASE WHEN is_answered = 1 THEN 1 ELSE 0 END) as answered_calls,
-                COALESCE(SUM(duration_seconds), 0) as total_talk_seconds,
-                SUM(CASE WHEN disposition = 'converted' THEN 1 ELSE 0 END) as conversions
-            FROM calls
-            WHERE rep_id = $1 AND DATE(started_at) = $2`),
-            [userId, today]
-        );
+        const [todayStats, weekStats, leadStats, followupCount, recentCalls, myRank, myXp] = await Promise.all([
+            // Today's call stats
+            Promise.resolve(query<{
+                total_calls: string;
+                answered_calls: string;
+                total_talk_seconds: string;
+                conversions: string;
+            }>(
+                pgToSqlite(`SELECT 
+                    COUNT(*) as total_calls,
+                    SUM(CASE WHEN is_answered = 1 THEN 1 ELSE 0 END) as answered_calls,
+                    COALESCE(SUM(duration_seconds), 0) as total_talk_seconds,
+                    SUM(CASE WHEN disposition = 'converted' THEN 1 ELSE 0 END) as conversions
+                FROM calls
+                WHERE rep_id = $1 AND DATE(started_at) = $2`),
+                [userId, today]
+            )),
 
-        // This week's stats
-        const weekStats = query<{
-            total_calls: string;
-            conversions: string;
-        }>(
-            pgToSqlite(`SELECT 
-                COUNT(*) as total_calls,
-                SUM(CASE WHEN disposition = 'converted' THEN 1 ELSE 0 END) as conversions
-            FROM calls
-            WHERE rep_id = $1 AND started_at >= date('now', '-7 days')`),
-            [userId]
-        );
+            // This week's stats
+            Promise.resolve(query<{
+                total_calls: string;
+                conversions: string;
+            }>(
+                pgToSqlite(`SELECT 
+                    COUNT(*) as total_calls,
+                    SUM(CASE WHEN disposition = 'converted' THEN 1 ELSE 0 END) as conversions
+                FROM calls
+                WHERE rep_id = $1 AND started_at >= date('now', '-7 days')`),
+                [userId]
+            )),
 
-        // Assigned leads by status
-        const leadStats = query<{ status: string; count: string }>(
-            pgToSqlite(`SELECT status, COUNT(*) as count
-            FROM leads
-            WHERE assigned_to = $1 AND org_id = $2
-            GROUP BY status`),
-            [userId, orgId]
-        );
+            // Assigned leads by status
+            Promise.resolve(query<{ status: string; count: string }>(
+                pgToSqlite(`SELECT status, COUNT(*) as count
+                FROM leads
+                WHERE assigned_to = $1 AND org_id = $2
+                GROUP BY status`),
+                [userId, orgId]
+            )),
 
-        // Today's pending followups
-        const followupCount = query<{ count: string }>(
-            pgToSqlite(`SELECT COUNT(*) as count
-            FROM followups
-            WHERE rep_id = $1 AND is_completed = 0 AND DATE(due_date) <= $2`),
-            [userId, today]
-        );
+            // Today's pending followups
+            Promise.resolve(query<{ count: string }>(
+                pgToSqlite(`SELECT COUNT(*) as count
+                FROM followups
+                WHERE rep_id = $1 AND is_completed = 0 AND DATE(due_date) <= $2`),
+                [userId, today]
+            )),
 
-        // Recent calls (last 5)
-        const recentCalls = query(
-            pgToSqlite(`SELECT c.id, c.started_at, c.duration_seconds, c.is_answered, c.disposition,
-                l.first_name as lead_first_name, l.last_name as lead_last_name, l.phone as lead_phone
-            FROM calls c
-            LEFT JOIN leads l ON c.lead_id = l.id
-            WHERE c.rep_id = $1
-            ORDER BY c.started_at DESC
-            LIMIT 5`),
-            [userId]
-        );
+            // Recent calls (last 5)
+            Promise.resolve(query(
+                pgToSqlite(`SELECT c.id, c.started_at, c.duration_seconds, c.is_answered, c.disposition,
+                    l.first_name as lead_first_name, l.last_name as lead_last_name, l.phone as lead_phone
+                FROM calls c
+                LEFT JOIN leads l ON c.lead_id = l.id
+                WHERE c.rep_id = $1
+                ORDER BY c.started_at DESC
+                LIMIT 5`),
+                [userId]
+            )),
 
-        // Leaderboard position (XP based)
-        const xpRank = query<{ rep_id: string; total_xp: string }>(
-            pgToSqlite(`SELECT rep_id, COALESCE(SUM(xp_delta), 0) as total_xp
-            FROM rep_xp_history
-            WHERE rep_id IN (SELECT id FROM users WHERE org_id = $1)
-            GROUP BY rep_id
-            ORDER BY total_xp DESC`),
-            [orgId]
-        );
+            // Get Rank and XP from in-memory cache
+            getRepRank(orgId, userId),
+            getRepScore(orgId, userId)
+        ]);
 
-        const myXp = xpRank.find((r: any) => r.rep_id === userId);
-        const myRank = xpRank.findIndex((r: any) => r.rep_id === userId) + 1;
+        // Mock total reps for now (or get from user count)
+        const totalReps = queryOne<{ count: string }>('SELECT COUNT(*) as count FROM users WHERE org_id = ? AND role = "rep"', [orgId]);
 
         res.json({
             today: {
@@ -352,8 +353,8 @@ router.get('/my-stats', async (req: Request, res: Response) => {
             recentCalls,
             leaderboard: {
                 rank: myRank || 0,
-                totalReps: xpRank.length,
-                xp: parseInt(myXp?.total_xp || '0', 10),
+                totalReps: totalReps ? parseInt(totalReps.count, 10) : 0,
+                xp: myXp || 0,
             },
         });
     } catch (error) {
@@ -369,103 +370,105 @@ router.get('/my-performance', async (req: Request, res: Response) => {
         const { period = '7d' } = req.query;
         const days = period === '30d' ? 30 : period === 'today' ? 1 : 7;
 
-        // Daily breakdown
-        const dailyStats = query(
-            pgToSqlite(`SELECT 
-                DATE(started_at) as date,
-                COUNT(*) as calls,
-                SUM(CASE WHEN is_answered = 1 THEN 1 ELSE 0 END) as answered,
-                COALESCE(SUM(duration_seconds), 0) as talk_seconds,
-                SUM(CASE WHEN disposition = 'converted' THEN 1 ELSE 0 END) as conversions
-            FROM calls
-            WHERE rep_id = $1 AND started_at >= date('now', '-${days} days')
-            GROUP BY DATE(started_at)
-            ORDER BY date`),
-            [userId]
-        );
-
-        // Hourly distribution for best time analysis
-        const hourlyStats = query(
-            pgToSqlite(`SELECT 
-                CAST(strftime('%H', started_at) AS INTEGER) as hour,
-                COUNT(*) as calls,
-                SUM(CASE WHEN is_answered = 1 THEN 1 ELSE 0 END) as answered,
-                ROUND(SUM(CASE WHEN is_answered = 1 THEN 1.0 ELSE 0 END) * 100.0 / COUNT(*), 1) as connect_rate
-            FROM calls
-            WHERE rep_id = $1 AND started_at >= date('now', '-30 days')
-            GROUP BY hour
-            ORDER BY hour`),
-            [userId]
-        );
-
-        // Disposition breakdown
-        const dispositions = query(
-            pgToSqlite(`SELECT 
-                COALESCE(disposition, 'unknown') as disposition,
-                COUNT(*) as count
-            FROM calls
-            WHERE rep_id = $1 AND started_at >= date('now', '-${days} days')
-            GROUP BY disposition
-            ORDER BY count DESC`),
-            [userId]
-        );
-
-        // XP history
-        const xpHistory = query(
-            pgToSqlite(`SELECT 
-                DATE(created_at) as date,
-                SUM(xp_delta) as xp,
-                GROUP_CONCAT(reason) as reasons
-            FROM rep_xp_history
-            WHERE rep_id = $1 AND created_at >= date('now', '-${days} days')
-            GROUP BY DATE(created_at)
-            ORDER BY date`),
-            [userId]
-        );
-
-        // Total XP
-        const totalXp = query<{ total: string }>(
-            pgToSqlite('SELECT COALESCE(SUM(xp_delta), 0) as total FROM rep_xp_history WHERE rep_id = $1'),
-            [userId]
-        );
-
-        // Team comparison (percentile)
-        const teamAvg = query<{
-            avg_calls: string;
-            avg_talk_time: string;
-            avg_conversions: string;
-        }>(
-            pgToSqlite(`SELECT 
-                AVG(call_count) as avg_calls,
-                AVG(talk_time) as avg_talk_time,
-                AVG(conv_count) as avg_conversions
-            FROM (
-                SELECT 
-                    rep_id,
-                    COUNT(*) as call_count,
-                    SUM(duration_seconds) as talk_time,
-                    SUM(CASE WHEN disposition = 'converted' THEN 1 ELSE 0 END) as conv_count
+        const [dailyStats, hourlyStats, dispositions, xpHistory, totalXp, teamAvg, myTotals] = await Promise.all([
+            // Daily breakdown
+            Promise.resolve(query(
+                pgToSqlite(`SELECT 
+                    DATE(started_at) as date,
+                    COUNT(*) as calls,
+                    SUM(CASE WHEN is_answered = 1 THEN 1 ELSE 0 END) as answered,
+                    COALESCE(SUM(duration_seconds), 0) as talk_seconds,
+                    SUM(CASE WHEN disposition = 'converted' THEN 1 ELSE 0 END) as conversions
                 FROM calls
-                WHERE org_id = $1 AND started_at >= date('now', '-${days} days')
-                GROUP BY rep_id
-            )`),
-            [req.user!.orgId]
-        );
+                WHERE rep_id = $1 AND started_at >= date('now', '-${days} days')
+                GROUP BY DATE(started_at)
+                ORDER BY date`),
+                [userId]
+            )),
 
-        // Personal totals for comparison
-        const myTotals = query<{
-            calls: string;
-            talk_time: string;
-            conversions: string;
-        }>(
-            pgToSqlite(`SELECT 
-                COUNT(*) as calls,
-                COALESCE(SUM(duration_seconds), 0) as talk_time,
-                SUM(CASE WHEN disposition = 'converted' THEN 1 ELSE 0 END) as conversions
-            FROM calls
-            WHERE rep_id = $1 AND started_at >= date('now', '-${days} days')`),
-            [userId]
-        );
+            // Hourly distribution for best time analysis
+            Promise.resolve(query(
+                pgToSqlite(`SELECT 
+                    CAST(strftime('%H', started_at) AS INTEGER) as hour,
+                    COUNT(*) as calls,
+                    SUM(CASE WHEN is_answered = 1 THEN 1 ELSE 0 END) as answered,
+                    ROUND(SUM(CASE WHEN is_answered = 1 THEN 1.0 ELSE 0 END) * 100.0 / COUNT(*), 1) as connect_rate
+                FROM calls
+                WHERE rep_id = $1 AND started_at >= date('now', '-30 days')
+                GROUP BY hour
+                ORDER BY hour`),
+                [userId]
+            )),
+
+            // Disposition breakdown
+            Promise.resolve(query(
+                pgToSqlite(`SELECT 
+                    COALESCE(disposition, 'unknown') as disposition,
+                    COUNT(*) as count
+                FROM calls
+                WHERE rep_id = $1 AND started_at >= date('now', '-${days} days')
+                GROUP BY disposition
+                ORDER BY count DESC`),
+                [userId]
+            )),
+
+            // XP history
+            Promise.resolve(query(
+                pgToSqlite(`SELECT 
+                    DATE(created_at) as date,
+                    SUM(xp_delta) as xp,
+                    GROUP_CONCAT(reason) as reasons
+                FROM rep_xp_history
+                WHERE rep_id = $1 AND created_at >= date('now', '-${days} days')
+                GROUP BY DATE(created_at)
+                ORDER BY date`),
+                [userId]
+            )),
+
+            // Total XP
+            Promise.resolve(query<{ total: string }>(
+                pgToSqlite('SELECT COALESCE(SUM(xp_delta), 0) as total FROM rep_xp_history WHERE rep_id = $1'),
+                [userId]
+            )),
+
+            // Team comparison (percentile)
+            Promise.resolve(query<{
+                avg_calls: string;
+                avg_talk_time: string;
+                avg_conversions: string;
+            }>(
+                pgToSqlite(`SELECT 
+                    AVG(call_count) as avg_calls,
+                    AVG(talk_time) as avg_talk_time,
+                    AVG(conv_count) as avg_conversions
+                FROM (
+                    SELECT 
+                        rep_id,
+                        COUNT(*) as call_count,
+                        SUM(duration_seconds) as talk_time,
+                        SUM(CASE WHEN disposition = 'converted' THEN 1 ELSE 0 END) as conv_count
+                    FROM calls
+                    WHERE org_id = $1 AND started_at >= date('now', '-${days} days')
+                    GROUP BY rep_id
+                )`),
+                [req.user!.orgId]
+            )),
+
+            // Personal totals for comparison
+            Promise.resolve(query<{
+                calls: string;
+                talk_time: string;
+                conversions: string;
+            }>(
+                pgToSqlite(`SELECT 
+                    COUNT(*) as calls,
+                    COALESCE(SUM(duration_seconds), 0) as talk_time,
+                    SUM(CASE WHEN disposition = 'converted' THEN 1 ELSE 0 END) as conversions
+                FROM calls
+                WHERE rep_id = $1 AND started_at >= date('now', '-${days} days')`),
+                [userId]
+            ))
+        ]);
 
         res.json({
             period: days,

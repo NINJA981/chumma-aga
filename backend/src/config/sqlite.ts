@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import Database, { Database as DatabaseType } from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
@@ -13,7 +13,7 @@ if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
 }
 
-export const db = new Database(dbPath, {
+export const db: DatabaseType = new Database(dbPath, {
     verbose: process.env.NODE_ENV === 'development' ? console.log : undefined
 });
 
