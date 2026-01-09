@@ -14,14 +14,28 @@ import {
     Bell,
     Search,
     ChevronRight,
+    Phone,
+    TrendingUp,
+    Calendar,
+    Target,
 } from 'lucide-react';
 
-const navItems = [
+// Admin/Manager navigation
+const adminNavItems = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard', description: 'Overview & metrics' },
-    { to: '/leads', icon: Users, label: 'Leads', description: 'Manage contacts' },
+    { to: '/leads', icon: Users, label: 'All Leads', description: 'Manage contacts' },
     { to: '/leaderboard', icon: Trophy, label: 'Leaderboard', description: 'Team rankings' },
     { to: '/war-room', icon: Swords, label: 'War Room', description: 'Live activity' },
     { to: '/analytics', icon: BarChart3, label: 'Analytics', description: 'Deep insights' },
+];
+
+// Salesperson navigation
+const repNavItems = [
+    { to: '/', icon: LayoutDashboard, label: 'My Dashboard', description: 'Your overview' },
+    { to: '/my-leads', icon: Phone, label: 'My Leads', description: 'Your contacts' },
+    { to: '/my-performance', icon: TrendingUp, label: 'Performance', description: 'Your stats' },
+    { to: '/followups', icon: Calendar, label: 'Follow-ups', description: 'Scheduled calls' },
+    { to: '/leaderboard', icon: Trophy, label: 'Leaderboard', description: 'Team rankings' },
 ];
 
 const sidebarVariants = {
@@ -53,6 +67,10 @@ export default function Layout({ children }) {
     const { connected } = useSocket();
     const location = useLocation();
 
+    // Determine which nav items to show based on role
+    const isRep = user?.role === 'rep';
+    const navItems = isRep ? repNavItems : adminNavItems;
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex">
             {/* Premium Sidebar */}
@@ -79,7 +97,9 @@ export default function Layout({ children }) {
                             <h1 className="text-lg font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
                                 VocalPulse
                             </h1>
-                            <p className="text-[10px] text-slate-500 font-medium tracking-wider uppercase">Sales Intelligence</p>
+                            <p className="text-[10px] text-slate-500 font-medium tracking-wider uppercase">
+                                {isRep ? 'Sales Rep' : 'Sales Intelligence'}
+                            </p>
                         </div>
                     </div>
                 </motion.div>
@@ -177,7 +197,9 @@ export default function Layout({ children }) {
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{user?.firstName} {user?.lastName}</p>
-                            <p className="text-[10px] text-slate-500 capitalize font-medium">{user?.role}</p>
+                            <p className="text-[10px] text-slate-500 capitalize font-medium">
+                                {user?.role === 'rep' ? 'Sales Rep' : user?.role}
+                            </p>
                         </div>
                         <ChevronRight size={14} className="text-slate-600" />
                     </motion.div>

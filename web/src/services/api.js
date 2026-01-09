@@ -92,3 +92,24 @@ export const aiApi = {
     battlecards: () =>
         api.get('/ai/battlecards'),
 };
+
+export const followupsApi = {
+    list: (params) =>
+        api.get('/followups', { params }),
+    create: (data) =>
+        api.post('/followups', data),
+    update: (id, data) =>
+        api.put(`/followups/${id}`, data),
+    complete: (id) =>
+        api.put(`/followups/${id}/complete`),
+    delete: (id) =>
+        api.delete(`/followups/${id}`),
+};
+
+export const myStatsApi = {
+    dashboard: () =>
+        api.get('/analytics/my-stats'),
+    performance: (period) =>
+        api.get('/analytics/my-performance', { params: { period } }),
+};
+

@@ -1,14 +1,23 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import Layout from './components/Layout';
+
+// Admin/Manager Pages
 import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
-import Leaderboard from './pages/Leaderboard';
 import WarRoom from './pages/WarRoom';
 import Analytics from './pages/Analytics';
+
+// Salesperson Pages
+import SalespersonDashboard from './pages/SalespersonDashboard';
+import MyLeads from './pages/MyLeads';
+import MyPerformance from './pages/MyPerformance';
+import FollowUps from './pages/FollowUps';
+
+// Shared Pages
+import Leaderboard from './pages/Leaderboard';
 import Login from './pages/Login';
-import { Navigate } from 'react-router-dom';
 
 function ProtectedRoute({ children }) {
     const { isAuthenticated, loading } = useAuth();
@@ -28,6 +37,16 @@ function ProtectedRoute({ children }) {
     return <>{children}</>;
 }
 
+// Role-based home redirect
+function HomeRedirect() {
+    const { user } = useAuth();
+
+    if (user?.role === 'rep') {
+        return <SalespersonDashboard />;
+    }
+    return <Dashboard />;
+}
+
 function App() {
     return (
         <BrowserRouter>
@@ -41,11 +60,21 @@ function App() {
                                 <ProtectedRoute>
                                     <Layout>
                                         <Routes>
-                                            <Route path="/" element={<Dashboard />} />
+                                            {/* Home - Role-based */}
+                                            <Route path="/" element={<HomeRedirect />} />
+
+                                            {/* Salesperson Routes */}
+                                            <Route path="/my-leads" element={<MyLeads />} />
+                                            <Route path="/my-performance" element={<MyPerformance />} />
+                                            <Route path="/followups" element={<FollowUps />} />
+
+                                            {/* Admin/Manager Routes */}
                                             <Route path="/leads" element={<Leads />} />
-                                            <Route path="/leaderboard" element={<Leaderboard />} />
                                             <Route path="/war-room" element={<WarRoom />} />
                                             <Route path="/analytics" element={<Analytics />} />
+
+                                            {/* Shared Routes */}
+                                            <Route path="/leaderboard" element={<Leaderboard />} />
                                         </Routes>
                                     </Layout>
                                 </ProtectedRoute>

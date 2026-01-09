@@ -15,6 +15,7 @@ import analyticsRouter from './routes/analytics.js';
 import leaderboardRouter from './routes/leaderboard.js';
 import aiRouter from './routes/ai.js';
 import webhookRouter from './routes/webhooks.js';
+import followupsRouter from './routes/followups.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -48,6 +49,15 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// Root endpoint for convenience
+app.get('/', (req, res) => {
+    res.json({
+        message: 'VocalPulse Backend API is running',
+        docs: '/docs', // Placeholder if we get docs later
+        health: '/api/health'
+    });
+});
+
 // API Routes
 app.use('/api/auth', authRouter);
 app.use('/api/leads', leadsRouter);
@@ -57,6 +67,7 @@ app.use('/api/leaderboard', leaderboardRouter);
 app.use('/api/leaderboard', leaderboardRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/webhooks', webhookRouter);
+app.use('/api/followups', followupsRouter);
 
 // Error handling
 app.use(notFoundHandler);

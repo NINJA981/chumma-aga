@@ -249,4 +249,244 @@ router.get('/fake-reporting', requireManager, async (req: Request, res: Response
     }
 });
 
+// GET /api/analytics/my-stats - Personal dashboard stats for salesperson
+router.get('/my-stats', async (req: Request, res: Response) => {
+    try {
+        const userId = req.user!.id;
+        const orgId = req.user!.orgId;
+        const today = new Date().toISOString().split('T')[0];
+
+        // Today's call stats
+        const todayStats = query<{
+            total_calls: string;
+            answered_calls: string;
+            total_talk_seconds: string;
+            conversions: string;
+        }>(
+            pgToSqlite(`SELECT 
+                COUNT(*) as total_calls,
+                SUM(CASE WHEN is_answered = 1 THEN 1 ELSE 0 END) as answered_calls,
+                COALESCE(SUM(duration_seconds), 0) as total_talk_seconds,
+                SUM(CASE WHEN disposition = 'converted' THEN 1 ELSE 0 END) as conversions
+            FROM calls
+            WHERE rep_id = $1 AND DATE(started_at) = $2`),
+            [userId, today]
+        );
+
+        // This week's stats
+        const weekStats = query<{
+            total_calls: string;
+            conversions: string;
+        }>(
+            pgToSqlite(`SELECT 
+                COUNT(*) as total_calls,
+                SUM(CASE WHEN disposition = 'converted' THEN 1 ELSE 0 END) as conversions
+            FROM calls
+            WHERE rep_id = $1 AND started_at >= date('now', '-7 days')`),
+            [userId]
+        );
+
+        // Assigned leads by status
+        const leadStats = query<{ status: string; count: string }>(
+            pgToSqlite(`SELECT status, COUNT(*) as count
+            FROM leads
+            WHERE assigned_to = $1 AND org_id = $2
+            GROUP BY status`),
+            [userId, orgId]
+        );
+
+        // Today's pending followups
+        const followupCount = query<{ count: string }>(
+            pgToSqlite(`SELECT COUNT(*) as count
+            FROM followups
+            WHERE rep_id = $1 AND is_completed = 0 AND DATE(due_date) <= $2`),
+            [userId, today]
+        );
+
+        // Recent calls (last 5)
+        const recentCalls = query(
+            pgToSqlite(`SELECT c.id, c.started_at, c.duration_seconds, c.is_answered, c.disposition,
+                l.first_name as lead_first_name, l.last_name as lead_last_name, l.phone as lead_phone
+            FROM calls c
+            LEFT JOIN leads l ON c.lead_id = l.id
+            WHERE c.rep_id = $1
+            ORDER BY c.started_at DESC
+            LIMIT 5`),
+            [userId]
+        );
+
+        // Leaderboard position (XP based)
+        const xpRank = query<{ rep_id: string; total_xp: string }>(
+            pgToSqlite(`SELECT rep_id, COALESCE(SUM(xp_delta), 0) as total_xp
+            FROM rep_xp_history
+            WHERE rep_id IN (SELECT id FROM users WHERE org_id = $1)
+            GROUP BY rep_id
+            ORDER BY total_xp DESC`),
+            [orgId]
+        );
+
+        const myXp = xpRank.find((r: any) => r.rep_id === userId);
+        const myRank = xpRank.findIndex((r: any) => r.rep_id === userId) + 1;
+
+        res.json({
+            today: {
+                calls: parseInt(todayStats[0]?.total_calls || '0', 10),
+                answered: parseInt(todayStats[0]?.answered_calls || '0', 10),
+                talkTimeMinutes: Math.round(parseInt(todayStats[0]?.total_talk_seconds || '0') / 60),
+                conversions: parseInt(todayStats[0]?.conversions || '0', 10),
+            },
+            week: {
+                calls: parseInt(weekStats[0]?.total_calls || '0', 10),
+                conversions: parseInt(weekStats[0]?.conversions || '0', 10),
+            },
+            leads: {
+                byStatus: leadStats.reduce((acc: any, curr: any) => {
+                    acc[curr.status] = parseInt(curr.count, 10);
+                    return acc;
+                }, {}),
+                total: leadStats.reduce((sum: number, curr: any) => sum + parseInt(curr.count, 10), 0),
+            },
+            followups: {
+                pending: parseInt(followupCount[0]?.count || '0', 10),
+            },
+            recentCalls,
+            leaderboard: {
+                rank: myRank || 0,
+                totalReps: xpRank.length,
+                xp: parseInt(myXp?.total_xp || '0', 10),
+            },
+        });
+    } catch (error) {
+        console.error('My stats error:', error);
+        res.status(500).json({ error: 'Failed to fetch personal stats' });
+    }
+});
+
+// GET /api/analytics/my-performance - Detailed personal performance for salesperson
+router.get('/my-performance', async (req: Request, res: Response) => {
+    try {
+        const userId = req.user!.id;
+        const { period = '7d' } = req.query;
+        const days = period === '30d' ? 30 : period === 'today' ? 1 : 7;
+
+        // Daily breakdown
+        const dailyStats = query(
+            pgToSqlite(`SELECT 
+                DATE(started_at) as date,
+                COUNT(*) as calls,
+                SUM(CASE WHEN is_answered = 1 THEN 1 ELSE 0 END) as answered,
+                COALESCE(SUM(duration_seconds), 0) as talk_seconds,
+                SUM(CASE WHEN disposition = 'converted' THEN 1 ELSE 0 END) as conversions
+            FROM calls
+            WHERE rep_id = $1 AND started_at >= date('now', '-${days} days')
+            GROUP BY DATE(started_at)
+            ORDER BY date`),
+            [userId]
+        );
+
+        // Hourly distribution for best time analysis
+        const hourlyStats = query(
+            pgToSqlite(`SELECT 
+                CAST(strftime('%H', started_at) AS INTEGER) as hour,
+                COUNT(*) as calls,
+                SUM(CASE WHEN is_answered = 1 THEN 1 ELSE 0 END) as answered,
+                ROUND(SUM(CASE WHEN is_answered = 1 THEN 1.0 ELSE 0 END) * 100.0 / COUNT(*), 1) as connect_rate
+            FROM calls
+            WHERE rep_id = $1 AND started_at >= date('now', '-30 days')
+            GROUP BY hour
+            ORDER BY hour`),
+            [userId]
+        );
+
+        // Disposition breakdown
+        const dispositions = query(
+            pgToSqlite(`SELECT 
+                COALESCE(disposition, 'unknown') as disposition,
+                COUNT(*) as count
+            FROM calls
+            WHERE rep_id = $1 AND started_at >= date('now', '-${days} days')
+            GROUP BY disposition
+            ORDER BY count DESC`),
+            [userId]
+        );
+
+        // XP history
+        const xpHistory = query(
+            pgToSqlite(`SELECT 
+                DATE(created_at) as date,
+                SUM(xp_delta) as xp,
+                GROUP_CONCAT(reason) as reasons
+            FROM rep_xp_history
+            WHERE rep_id = $1 AND created_at >= date('now', '-${days} days')
+            GROUP BY DATE(created_at)
+            ORDER BY date`),
+            [userId]
+        );
+
+        // Total XP
+        const totalXp = query<{ total: string }>(
+            pgToSqlite('SELECT COALESCE(SUM(xp_delta), 0) as total FROM rep_xp_history WHERE rep_id = $1'),
+            [userId]
+        );
+
+        // Team comparison (percentile)
+        const teamAvg = query<{
+            avg_calls: string;
+            avg_talk_time: string;
+            avg_conversions: string;
+        }>(
+            pgToSqlite(`SELECT 
+                AVG(call_count) as avg_calls,
+                AVG(talk_time) as avg_talk_time,
+                AVG(conv_count) as avg_conversions
+            FROM (
+                SELECT 
+                    rep_id,
+                    COUNT(*) as call_count,
+                    SUM(duration_seconds) as talk_time,
+                    SUM(CASE WHEN disposition = 'converted' THEN 1 ELSE 0 END) as conv_count
+                FROM calls
+                WHERE org_id = $1 AND started_at >= date('now', '-${days} days')
+                GROUP BY rep_id
+            )`),
+            [req.user!.orgId]
+        );
+
+        // Personal totals for comparison
+        const myTotals = query<{
+            calls: string;
+            talk_time: string;
+            conversions: string;
+        }>(
+            pgToSqlite(`SELECT 
+                COUNT(*) as calls,
+                COALESCE(SUM(duration_seconds), 0) as talk_time,
+                SUM(CASE WHEN disposition = 'converted' THEN 1 ELSE 0 END) as conversions
+            FROM calls
+            WHERE rep_id = $1 AND started_at >= date('now', '-${days} days')`),
+            [userId]
+        );
+
+        res.json({
+            period: days,
+            dailyStats,
+            hourlyStats,
+            dispositions,
+            xpHistory,
+            totalXp: parseInt(totalXp[0]?.total || '0', 10),
+            comparison: {
+                teamAvgCalls: Math.round(parseFloat(teamAvg[0]?.avg_calls || '0')),
+                teamAvgTalkTime: Math.round(parseFloat(teamAvg[0]?.avg_talk_time || '0') / 60),
+                teamAvgConversions: Math.round(parseFloat(teamAvg[0]?.avg_conversions || '0')),
+                myCalls: parseInt(myTotals[0]?.calls || '0', 10),
+                myTalkTime: Math.round(parseInt(myTotals[0]?.talk_time || '0') / 60),
+                myConversions: parseInt(myTotals[0]?.conversions || '0', 10),
+            },
+        });
+    } catch (error) {
+        console.error('My performance error:', error);
+        res.status(500).json({ error: 'Failed to fetch personal performance' });
+    }
+});
+
 export default router;

@@ -6,15 +6,19 @@ import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
 import axios from 'axios';
-import OpenAI from 'openai';
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+// Import Gemini-based services (FREE)
+import { transcribeAudioBuffer } from './ai/transcription.js';
+import { analyzeConversation } from './ai/analysis.js';
 
+/**
+ * Process AI Analysis using Google Gemini (FREE alternative to OpenAI)
+ * - Transcription: Gemini 1.5 Flash multimodal
+ * - Analysis: Gemini 1.5 Flash text
+ */
 export const processAIAnalysis = async (callId, recordingUrl) => {
     try {
-        console.log(`Starting AI analysis for call ${callId}`);
+        console.log(`Starting AI analysis for call ${callId} (using Gemini - FREE)`);
 
         // 1. Download Audio
         const tempFilePath = path.join(os.tmpdir(), `${callId}.mp3`);
@@ -33,13 +37,9 @@ export const processAIAnalysis = async (callId, recordingUrl) => {
             writer.on('error', reject);
         });
 
-        // 2. Transcribe with Whisper
-        const transcription = await openai.audio.transcriptions.create({
-            file: fs.createReadStream(tempFilePath),
-            model: "whisper-1",
-        });
-
-        const transcriptText = transcription.text;
+        // 2. Transcribe with Gemini (FREE - replaces OpenAI Whisper)
+        const audioBuffer = fs.readFileSync(tempFilePath);
+        const transcriptText = await transcribeAudioBuffer(audioBuffer, `${callId}.mp3`);
 
         // Cleanup temp file
         fs.unlinkSync(tempFilePath);
@@ -47,37 +47,24 @@ export const processAIAnalysis = async (callId, recordingUrl) => {
         // Update transcript in DB
         execute('UPDATE calls SET transcript = ? WHERE id = ?', [transcriptText, callId]);
 
-        // 3. Analyze with GPT-4o
-        const systemPrompt = `
-            You are a sales analyst. Analyze this call transcript.
-            1. Summarize the call in 2 sentences.
-            2. Extract 'Lead Intent' (Hot, Warm, Cold).
-            3. Extract 'Next Action' mentioned and a date if possible.
-            4. Determine Sentiment (Positive, Neutral, Negative).
-            
-            Return JSON: { "summary": "...", "intent": "...", "next_action": "...", "sentiment": "..." }
-        `;
-
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4o",
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: transcriptText }
-            ],
-            response_format: { type: "json_object" }
-        });
-
-        const analysis = JSON.parse(completion.choices[0].message.content);
+        // 3. Analyze with Gemini (FREE - replaces OpenAI GPT-4)
+        const analysisResult = await analyzeConversation(transcriptText);
 
         // 4. Save Analysis to DB
-        // Insert or Update call_analysis table
-        const analysisId = crypto.randomUUID(); // Need polyfill if < Node 19
+        const score = analysisResult.sentimentScore;
 
-        // Map sentiment string to score approx? Or just save label.
-        // basic schema has sentiment_score, sentiment_label
-        let score = 5;
-        if (analysis.sentiment === 'Positive') score = 8;
-        if (analysis.sentiment === 'Negative') score = 3;
+        // Map Gemini sentiment labels to simple labels
+        let sentimentLabel = 'Neutral';
+        if (analysisResult.sentimentLabel === 'positive' || analysisResult.sentimentLabel === 'delighted') {
+            sentimentLabel = 'Positive';
+        } else if (analysisResult.sentimentLabel === 'angry' || analysisResult.sentimentLabel === 'frustrated') {
+            sentimentLabel = 'Negative';
+        }
+
+        // Extract next action from action items
+        const nextAction = analysisResult.actionItems.length > 0
+            ? analysisResult.actionItems[0].text
+            : '';
 
         execute(`
             INSERT INTO call_analysis (
@@ -89,23 +76,25 @@ export const processAIAnalysis = async (callId, recordingUrl) => {
         `, [
             callId,
             score,
-            analysis.sentiment,
-            analysis.summary,
-            JSON.stringify([analysis.next_action])
+            sentimentLabel,
+            analysisResult.fullSummary,
+            JSON.stringify(analysisResult.actionItems.map(a => a.text))
         ]);
 
         // 5. Emit Socket Event for Real-time Dashboard Update
-        // Need org_id from call
         const call = queryOne('SELECT org_id FROM calls WHERE id = ?', [callId]);
         if (call) {
             io.to(call.org_id).emit('call_analyzed', {
                 callId,
-                summary: analysis.summary,
-                sentiment: analysis.sentiment
+                summary: analysisResult.fullSummary,
+                sentiment: sentimentLabel,
+                sentimentScore: score,
+                bulletPoints: analysisResult.summaryBullets,
+                actionItems: analysisResult.actionItems.map(a => a.text)
             });
         }
 
-        console.log(`AI Analysis complete for ${callId}`);
+        console.log(`AI Analysis complete for ${callId} (Gemini - FREE)`);
 
     } catch (error) {
         console.error(`AI Analysis failed for ${callId}:`, error);
