@@ -37,9 +37,23 @@ export async function authenticate(
         const token = authHeader.substring(7);
         const decoded = jwt.verify(token, config.jwt.secret) as { userId: string };
 
+        // Handle demo user bypass
+        if (decoded.userId === 'demo-user-id') {
+            req.user = {
+                id: 'demo-user-id',
+                orgId: 'demo-org-id',
+                email: 'demo@vocalpulse.com',
+                firstName: 'Demo',
+                lastName: 'User',
+                role: 'admin'
+            };
+            next();
+            return;
+        }
+
         const user = await queryOne<AuthUser>(
             `SELECT id, org_id as "orgId", email, role, first_name as "firstName", last_name as "lastName"
-       FROM users WHERE id = $1 AND is_active = true`,
+       FROM users WHERE id = ? AND is_active = 1`,
             [decoded.userId]
         );
 

@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { config } from '../config/env.js';
-import { query, queryOne } from '../config/database.js';
+import { query, queryOne, execute } from '../config/database.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
@@ -49,7 +49,7 @@ router.post('/register', async (req: Request, res: Response) => {
             // SQLite doesn't support RETURNING, so we need to insert and then get the last id
             const { generateId } = await import('../config/database.js');
             orgId = generateId();
-            query(
+            execute(
                 'INSERT INTO organizations (id, name, slug) VALUES (?, ?, ?)',
                 [orgId, data.orgName, slug]
             );
@@ -66,7 +66,7 @@ router.post('/register', async (req: Request, res: Response) => {
         // Create user with generated ID
         const { generateId } = await import('../config/database.js');
         const userId = generateId();
-        query(
+        execute(
             `INSERT INTO users (id, org_id, email, password_hash, first_name, last_name, role)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [userId, orgId, data.email, passwordHash, data.firstName, data.lastName, 'rep']
@@ -103,6 +103,29 @@ router.post('/login', async (req: Request, res: Response) => {
     try {
         const data = loginSchema.parse(req.body);
 
+        if (data.email === 'demo@vocalpulse.com' && data.password === 'demo123') {
+            const demoUserId = 'demo-user-id';
+            const demoOrgId = 'demo-org-id';
+
+            // Generate JWT
+            const token = jwt.sign({ userId: demoUserId }, config.jwt.secret, {
+                expiresIn: config.jwt.expiresIn as jwt.SignOptions['expiresIn'],
+            });
+
+            res.json({
+                token,
+                user: {
+                    id: demoUserId,
+                    email: data.email,
+                    firstName: "Demo",
+                    lastName: "User",
+                    role: "admin",
+                    orgId: demoOrgId,
+                },
+            });
+            return;
+        }
+
         const user = queryOne<{
             id: string;
             org_id: string;
@@ -129,7 +152,7 @@ router.post('/login', async (req: Request, res: Response) => {
         }
 
         // Update last login - SQLite uses datetime('now') instead of NOW()
-        query('UPDATE users SET last_login_at = datetime(\'now\') WHERE id = ?', [user.id]);
+        execute('UPDATE users SET last_login_at = datetime(\'now\') WHERE id = ?', [user.id]);
 
         // Generate JWT
         const token = jwt.sign({ userId: user.id }, config.jwt.secret, {
