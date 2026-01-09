@@ -126,7 +126,7 @@ export function emitMilestone(
     milestone: {
         repId: string;
         repName: string;
-        type: 'calls_milestone' | 'conversion' | 'top_rank' | 'speed_bonus' | 'quality_bonus';
+        type: 'calls_milestone' | 'conversion' | 'top_rank' | 'speed_bonus' | 'quality_bonus' | 'ai_quality_star' | 'ai_quality_good';
         value: number;
         message: string;
     }

@@ -5,19 +5,27 @@ import { query, execute, generateId } from '../config/database.js';
 
 // --- Scoring Configuration ---
 export const ScoringConfig = {
+    // Base Call Scoring
     CALL: 10,
     TALK_MINUTE: 5,
     CONVERSION: 100,
     MISSED_FOLLOWUP_PENALTY: 50,
 
-    // New Bonuses
+    // Existing Bonuses
     QUALITY_CALL_THRESHOLD_SECONDS: 300, // 5 minutes
     QUALITY_CALL_BONUS: 20,
-
     SPEED_TO_LEAD_THRESHOLD_SECONDS: 300, // 5 minutes from lead creation
     SPEED_TO_LEAD_BONUS: 10,
-
     STREAK_DAILY_BONUS: 50, // Bonus for maintaining a streak
+
+    // NEW: AI Quality Scoring (from call content analysis)
+    AI_SENTIMENT_MULTIPLIER: 5,         // Per sentiment point (max 50 XP for score of 10)
+    AI_ACTION_ITEM_BONUS: 10,           // Per action item identified (max 30 XP)
+    AI_ACTION_ITEM_MAX: 30,             // Cap on action item bonus
+    AI_POSITIVE_OUTCOME_BONUS: 25,      // If call ended positively
+    AI_OBJECTION_HANDLED_BONUS: 15,     // If objections were handled well
+    AI_PROFESSIONAL_GREETING_BONUS: 5,  // If rep greeted professionally
+    AI_CLEAR_NEXT_STEPS_BONUS: 10,      // If clear next steps were discussed
 };
 
 export interface CallData {
@@ -207,3 +215,118 @@ export async function applyMissedFollowupPenalty(
     const rankings = await getTopRankings(orgId, 10);
     await emitLeaderboardUpdate(orgId, rankings);
 }
+
+// ===== AI QUALITY SCORING =====
+
+export interface AIQualityData {
+    sentimentScore: number;         // 1-10
+    actionItemsCount: number;       // Number of action items identified
+    positiveOutcome: boolean;       // Call ended positively
+    objectionHandled: boolean;      // Objections were handled
+    professionalGreeting: boolean;  // Rep greeted professionally
+    clearNextSteps: boolean;        // Clear next steps discussed
+}
+
+/**
+ * Calculate XP from AI analysis quality metrics
+ * This rewards quality of conversations, not just quantity
+ */
+export function calculateAIQualityXP(data: AIQualityData): XPCalculationResult {
+    const breakdown: { reason: string; points: number }[] = [];
+    let totalXp = 0;
+
+    // 1. Sentiment Score (1-10 * multiplier)
+    const sentimentPoints = data.sentimentScore * ScoringConfig.AI_SENTIMENT_MULTIPLIER;
+    breakdown.push({ reason: `Sentiment (${data.sentimentScore}/10)`, points: sentimentPoints });
+    totalXp += sentimentPoints;
+
+    // 2. Action Items (capped)
+    if (data.actionItemsCount > 0) {
+        const actionPoints = Math.min(
+            data.actionItemsCount * ScoringConfig.AI_ACTION_ITEM_BONUS,
+            ScoringConfig.AI_ACTION_ITEM_MAX
+        );
+        breakdown.push({ reason: `Action Items (${data.actionItemsCount})`, points: actionPoints });
+        totalXp += actionPoints;
+    }
+
+    // 3. Positive Outcome Bonus
+    if (data.positiveOutcome) {
+        breakdown.push({ reason: 'Positive Outcome', points: ScoringConfig.AI_POSITIVE_OUTCOME_BONUS });
+        totalXp += ScoringConfig.AI_POSITIVE_OUTCOME_BONUS;
+    }
+
+    // 4. Objection Handling Bonus
+    if (data.objectionHandled) {
+        breakdown.push({ reason: 'Objection Handled', points: ScoringConfig.AI_OBJECTION_HANDLED_BONUS });
+        totalXp += ScoringConfig.AI_OBJECTION_HANDLED_BONUS;
+    }
+
+    // 5. Professional Greeting Bonus
+    if (data.professionalGreeting) {
+        breakdown.push({ reason: 'Professional Greeting', points: ScoringConfig.AI_PROFESSIONAL_GREETING_BONUS });
+        totalXp += ScoringConfig.AI_PROFESSIONAL_GREETING_BONUS;
+    }
+
+    // 6. Clear Next Steps Bonus
+    if (data.clearNextSteps) {
+        breakdown.push({ reason: 'Clear Next Steps', points: ScoringConfig.AI_CLEAR_NEXT_STEPS_BONUS });
+        totalXp += ScoringConfig.AI_CLEAR_NEXT_STEPS_BONUS;
+    }
+
+    return { totalXp, breakdown };
+}
+
+/**
+ * Update leaderboard with AI quality scoring after call analysis
+ */
+export async function updateLeaderboardWithAIQuality(
+    orgId: string,
+    repId: string,
+    repName: string,
+    callId: string,
+    aiData: AIQualityData
+): Promise<{ xpAwarded: number; breakdown: { reason: string; points: number }[] }> {
+    const { totalXp, breakdown } = calculateAIQualityXP(aiData);
+
+    // Update leaderboard score
+    const newScore = await updateLeaderboardScore(orgId, repId, totalXp);
+
+    // Record XP history
+    try {
+        execute(
+            `INSERT INTO rep_xp_history (id, rep_id, xp_delta, reason) VALUES (?, ?, ?, ?)`,
+            [generateId(), repId, totalXp, 'ai_quality_analysis']
+        );
+    } catch (e) {
+        console.error('Failed to record AI quality XP history:', e);
+    }
+
+    // Get updated rankings
+    const rankings = await getTopRankings(orgId, 10);
+
+    // Emit leaderboard update
+    await emitLeaderboardUpdate(orgId, rankings);
+
+    // Emit AI quality achievement milestone
+    if (totalXp >= 80) {
+        emitMilestone(orgId, {
+            repId,
+            repName,
+            type: 'ai_quality_star',
+            value: totalXp,
+            message: `⭐ ${repName} had an excellent call! +${totalXp} XP`,
+        });
+    } else if (totalXp >= 50) {
+        emitMilestone(orgId, {
+            repId,
+            repName,
+            type: 'ai_quality_good',
+            value: totalXp,
+            message: `👍 ${repName} handled that call well! +${totalXp} XP`,
+        });
+    }
+
+    return { xpAwarded: totalXp, breakdown };
+}
+

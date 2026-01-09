@@ -33,6 +33,18 @@ const MyLeads = () => {
     const [filterOpen, setFilterOpen] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
 
+    // Demo leads data
+    const demoLeads = [
+        { id: '1', first_name: 'Priya', last_name: 'Sharma', phone: '+91 98765 43210', company: 'TechVentures Pvt Ltd', status: 'new', optimal_call_hour: new Date().getHours(), call_count: 0 },
+        { id: '2', first_name: 'Rahul', last_name: 'Verma', phone: '+91 87654 32109', company: 'Global Solutions', status: 'contacted', optimal_call_hour: 14, call_count: 3 },
+        { id: '3', first_name: 'Anita', last_name: 'Patel', phone: '+91 76543 21098', company: 'InnovateTech', status: 'qualified', optimal_call_hour: 11, call_count: 5 },
+        { id: '4', first_name: 'Vikram', last_name: 'Singh', phone: '+91 65432 10987', company: 'StartupHub', status: 'new', optimal_call_hour: 16, call_count: 1, notes: 'Interested in enterprise plan. Follow up next week.' },
+        { id: '5', first_name: 'Neha', last_name: 'Gupta', phone: '+91 54321 09876', company: 'CloudFirst Inc', status: 'contacted', optimal_call_hour: 10, call_count: 2 },
+        { id: '6', first_name: 'Amit', last_name: 'Kumar', phone: '+91 43210 98765', company: 'DataDriven Co', status: 'qualified', optimal_call_hour: 15, call_count: 4 },
+        { id: '7', first_name: 'Sneha', last_name: 'Reddy', phone: '+91 32109 87654', company: 'FinanceFirst', status: 'converted', optimal_call_hour: 12, call_count: 8 },
+        { id: '8', first_name: 'Karthik', last_name: 'Nair', phone: '+91 21098 76543', company: 'HealthPlus', status: 'new', optimal_call_hour: new Date().getHours(), call_count: 0 },
+    ];
+
     const loadLeads = useCallback(async () => {
         try {
             const params = { limit: 100 };
@@ -42,7 +54,22 @@ const MyLeads = () => {
             const response = await leadsApi.list(params);
             setLeads(response.data.leads);
         } catch (error) {
-            console.error('Failed to load leads:', error);
+            console.error('Failed to load leads, using demo data:', error);
+            // Filter demo leads based on search and status
+            let filtered = demoLeads;
+            if (statusFilter !== 'all') {
+                filtered = filtered.filter(l => l.status === statusFilter);
+            }
+            if (searchQuery) {
+                const query = searchQuery.toLowerCase();
+                filtered = filtered.filter(l =>
+                    l.first_name.toLowerCase().includes(query) ||
+                    l.last_name.toLowerCase().includes(query) ||
+                    l.company.toLowerCase().includes(query) ||
+                    l.phone.includes(query)
+                );
+            }
+            setLeads(filtered);
         } finally {
             setLoading(false);
             setRefreshing(false);

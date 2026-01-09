@@ -2,6 +2,21 @@ import { getModel } from './gemini.js';
 import { config } from '../../config/env.js';
 import { addDays } from 'date-fns';
 
+// ===== QUALITY SCORING INTERFACE =====
+export interface CallQualityScore {
+    totalPoints: number;
+    breakdown: {
+        sentimentPoints: number;        // sentiment * 5 (max 50)
+        actionItemPoints: number;       // 10 per action (max 30)
+        positiveOutcomeBonus: number;   // 0 or 25
+        objectionHandlingBonus: number; // 0 or 15
+        professionalGreetingBonus: number; // 0 or 5
+        clearNextStepsBonus: number;    // 0 or 10
+    };
+    maxPossible: number;
+    percentageScore: number; // 0-100%
+}
+
 export interface ConversationAnalysis {
     sentimentScore: number; // 1-10
     sentimentLabel: 'angry' | 'frustrated' | 'neutral' | 'positive' | 'delighted';
@@ -15,11 +30,60 @@ export interface ConversationAnalysis {
     }>;
     keywords: string[];
     topics: string[];
+    // NEW: Quality indicators for scoring
+    qualityIndicators: {
+        positiveOutcome: boolean;
+        objectionHandled: boolean;
+        professionalGreeting: boolean;
+        clearNextSteps: boolean;
+    };
+    // NEW: Calculated quality score
+    qualityScore: CallQualityScore;
+}
+
+/**
+ * Calculate quality score from analysis results
+ */
+function calculateQualityScore(
+    sentimentScore: number,
+    actionItemsCount: number,
+    indicators: {
+        positiveOutcome: boolean;
+        objectionHandled: boolean;
+        professionalGreeting: boolean;
+        clearNextSteps: boolean;
+    }
+): CallQualityScore {
+    const breakdown = {
+        sentimentPoints: sentimentScore * 5,
+        actionItemPoints: Math.min(actionItemsCount * 10, 30), // Cap at 30
+        positiveOutcomeBonus: indicators.positiveOutcome ? 25 : 0,
+        objectionHandlingBonus: indicators.objectionHandled ? 15 : 0,
+        professionalGreetingBonus: indicators.professionalGreeting ? 5 : 0,
+        clearNextStepsBonus: indicators.clearNextSteps ? 10 : 0,
+    };
+
+    const totalPoints =
+        breakdown.sentimentPoints +
+        breakdown.actionItemPoints +
+        breakdown.positiveOutcomeBonus +
+        breakdown.objectionHandlingBonus +
+        breakdown.professionalGreetingBonus +
+        breakdown.clearNextStepsBonus;
+
+    const maxPossible = 50 + 30 + 25 + 15 + 5 + 10; // 135
+
+    return {
+        totalPoints,
+        breakdown,
+        maxPossible,
+        percentageScore: Math.round((totalPoints / maxPossible) * 100),
+    };
 }
 
 /**
  * Analyze a call transcript using Gemini 1.5 Flash
- * Generates: Sentiment, Summary, Action Items (Conversation DNA)
+ * Generates: Sentiment, Summary, Action Items, Quality Score (for Leaderboard XP)
  */
 export async function analyzeConversation(transcript: string): Promise<ConversationAnalysis> {
     if (!config.gemini.apiKey) {
@@ -31,6 +95,11 @@ export async function analyzeConversation(transcript: string): Promise<Conversat
 1. SENTIMENT: Score from 1-10 (1=Angry, 5=Neutral, 10=Delighted) and a label
 2. SUMMARY: 3 bullet points capturing the key discussion points
 3. ACTION ITEMS: Any follow-ups mentioned (e.g., "call back Tuesday", "send proposal")
+4. QUALITY INDICATORS (for scoring):
+   - positiveOutcome: Did the call end positively? (boolean)
+   - objectionHandled: Were customer objections addressed professionally? (boolean)
+   - professionalGreeting: Did the rep greet professionally and introduce themselves? (boolean)
+   - clearNextSteps: Were clear next steps discussed? (boolean)
 
 Respond ONLY in this exact JSON format:
 {
@@ -41,7 +110,13 @@ Respond ONLY in this exact JSON format:
   "fullSummary": "<2-sentence summary>",
   "actionItems": [{"text": "<action>", "relativeDue": "<today|tomorrow|next_week|specific_day|null>"}],
   "keywords": ["<keyword1>", "<keyword2>"],
-  "topics": ["<topic1>", "<topic2>"]
+  "topics": ["<topic1>", "<topic2>"],
+  "qualityIndicators": {
+    "positiveOutcome": <true|false>,
+    "objectionHandled": <true|false>,
+    "professionalGreeting": <true|false>,
+    "clearNextSteps": <true|false>
+  }
 }`;
 
     try {
@@ -96,6 +171,21 @@ Respond ONLY in this exact JSON format:
             };
         });
 
+        // Extract quality indicators (with defaults if missing)
+        const qualityIndicators = {
+            positiveOutcome: parsed.qualityIndicators?.positiveOutcome ?? false,
+            objectionHandled: parsed.qualityIndicators?.objectionHandled ?? false,
+            professionalGreeting: parsed.qualityIndicators?.professionalGreeting ?? false,
+            clearNextSteps: parsed.qualityIndicators?.clearNextSteps ?? false,
+        };
+
+        // Calculate quality score for leaderboard XP
+        const qualityScore = calculateQualityScore(
+            Math.min(10, Math.max(1, parsed.sentimentScore)),
+            actionItems.length,
+            qualityIndicators
+        );
+
         return {
             sentimentScore: Math.min(10, Math.max(1, parsed.sentimentScore)),
             sentimentLabel: parsed.sentimentLabel,
@@ -105,6 +195,8 @@ Respond ONLY in this exact JSON format:
             actionItems,
             keywords: parsed.keywords || [],
             topics: parsed.topics || [],
+            qualityIndicators,
+            qualityScore,
         };
     } catch (error) {
         console.error('Analysis error:', error);

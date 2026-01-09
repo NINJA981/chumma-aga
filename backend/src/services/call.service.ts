@@ -92,7 +92,7 @@ export class CallService {
             };
 
             // Fix: Fetch Rep Name for correct display
-            const rep = await import('../repositories/user.repository').then(m => m.userRepository.findById(repId));
+            const rep = userRepository.findById(repId);
             if (rep) {
                 callData.repName = `${rep.first_name} ${rep.last_name}`;
             }
